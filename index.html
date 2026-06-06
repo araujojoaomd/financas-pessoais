@@ -486,9 +486,28 @@ function chamarDemo(payload){
   return {ok:false,erro:'demo'};
 }
 
+// Normaliza competências: o Google Sheets às vezes converte "AAAA-MM" em DATA,
+// e o backend devolve "dd/MM/yyyy". Aqui voltamos sempre para "AAAA-MM".
+function normComp(v){
+  if(v==null) return '';
+  if(v instanceof Date) return v.getFullYear()+'-'+String(v.getMonth()+1).padStart(2,'0');
+  const s=String(v).trim(); if(!s) return '';
+  if(/^\d{4}-\d{2}$/.test(s)) return s;                       // já está certo
+  let m=s.match(/^(\d{4})-(\d{2})-\d{2}/);  if(m) return m[1]+'-'+m[2];   // AAAA-MM-DD
+  m=s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);  if(m) return m[3]+'-'+m[2];   // dd/MM/yyyy
+  m=s.match(/^(\d{4})\/(\d{2})/);           if(m) return m[1]+'-'+m[2];   // AAAA/MM
+  return s;
+}
+function normalizarComps(){
+  (DB.movimentos||[]).forEach(m=>{ m.Competencia=normComp(m.Competencia); m.CompGasto=normComp(m.CompGasto); });
+  (DB.compras||[]).forEach(c=>{ c.CompetenciaInicial=normComp(c.CompetenciaInicial); });
+  (DB.emprestimos||[]).forEach(e=>{ e.CompetenciaInicial=normComp(e.CompetenciaInicial); });
+  (DB.recorrentes||[]).forEach(r=>{ r.VigenciaInicio=normComp(r.VigenciaInicio); r.VigenciaFim=normComp(r.VigenciaFim); });
+}
 function aplicar(r){
   DB.contas = r.contas||[]; DB.cartoes = r.cartoes||[]; DB.compras = r.compras||[]; DB.recorrentes = r.recorrentes||[];
   DB.movimentos = r.movimentos||[]; DB.emprestimos = r.emprestimos||[]; DB.config = r.config||[];
+  normalizarComps();
   carregarFotos();
   popularSelects();
   renderTudo();
