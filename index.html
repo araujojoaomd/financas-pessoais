@@ -328,12 +328,16 @@ tbody tr:hover{background:#F3F8F5}
     <div class="toolbar">
       <h2>Extrato bancário</h2>
       <select class="flt" id="extConta" style="min-width:220px" onchange="renderExtrato()"></select>
+      <button class="btn-ghost" onclick="mudarExtMes(-1)">‹</button>
+      <select class="flt" id="extComp" style="min-width:150px;text-align:center;font-weight:600" onchange="renderExtrato()"></select>
+      <button class="btn-ghost" onclick="mudarExtMes(1)">›</button>
       <div class="sep"></div>
-      <button class="btn-ghost" onclick="carregar()">↻ Atualizar</button>
+      <button class="btn green" onclick="abrirMovimento(null,document.getElementById('extComp').value,'ENTRADA')">+ Receita</button>
+      <button class="btn green" onclick="abrirMovimento(null,document.getElementById('extComp').value,'SAÍDA')">+ Pagamento</button>
     </div>
     <div id="extResumo" class="resumo" style="grid-template-columns:repeat(4,1fr)"></div>
     <div class="tbl-wrap"><div id="extTbl"></div></div>
-    <p style="font-size:11.5px;color:#5B6B63;margin-top:10px">Mostra só o que já foi <b>realizado (PAGO)</b> nessa conta, em ordem de data, com o saldo correndo até o saldo atual. Previstos não entram aqui — confirme no <b>Controle do Mês</b>.</p>
+    <p style="font-size:11.5px;color:#5B6B63;margin-top:10px">Mostra só o que já foi <b>realizado (PAGO)</b> nessa conta no mês, em ordem de data. O <b>saldo inicial</b> é o saldo no começo do mês e o saldo corre até o fim do mês. Previstos não entram aqui — confirme no <b>Controle do Mês</b>.</p>
   </div>
 
   <!-- MOVIMENTOS -->
@@ -1432,6 +1436,13 @@ function chaveData(m){
   if(cm) return new Date(+cm[1],+cm[2]-1,1).getTime();
   return 0;
 }
+// Mês (AAAA-MM) em que o movimento foi realizado — pela Data, com fallback na Competência.
+function mesDoMov(m){
+  const d=String(m.Data||'').trim();
+  let mm=d.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if(mm) return mm[3]+'-'+mm[2];
+  return normComp(m.Competencia);
+}
 function movimentosDaConta(nome){
   const arr=(DB.movimentos||[]).filter(m=>
     (m.Conta||'')===nome && String(m.Status||'').toUpperCase()==='PAGO');
@@ -1445,8 +1456,24 @@ function popularExtratoContas(){
   sel.innerHTML=contas.map(n=>'<option value="'+n+'">'+n+'</option>').join('');
   if(atual && contas.includes(atual)) sel.value=atual;
 }
+function popularSeletorExtMes(){
+  const el=document.getElementById('extComp'); if(!el) return;
+  const atual=el.value||compAtual();
+  const start=compAdd(compAtual(),-24);
+  let opts=''; for(let i=0;i<61;i++){ const c=compAdd(start,i); opts+='<option value="'+c+'">'+labelMesAno(c)+'</option>'; }
+  el.innerHTML=opts; el.value=atual;
+}
+function mudarExtMes(d){
+  const el=document.getElementById('extComp');
+  const novo=compAdd(el.value||compAtual(),d);
+  if([...el.options].some(o=>o.value===novo)){ el.value=novo; renderExtrato(); }
+}
 function renderExtrato(){
   popularExtratoContas();
+  const elMes=document.getElementById('extComp');
+  if(elMes && !elMes.options.length) popularSeletorExtMes();
+  if(elMes && !elMes.value) elMes.value=compAtual();
+  const comp=elMes?elMes.value:compAtual();
   const sel=document.getElementById('extConta');
   const resumo=document.getElementById('extResumo');
   const tbl=document.getElementById('extTbl');
@@ -1456,10 +1483,14 @@ function renderExtrato(){
   const conta=(DB.contas||[]).find(c=>c.Nome===nome);
   const ini=conta?parseValor(conta.SaldoInicial):0;
   const movs=movimentosDaConta(nome);
-  let saldo=ini, entradas=0, saidas=0;
-  let linhas='<tr class="ext-abertura"><td colspan="'+(consolidado()?5:4)+'">Saldo inicial</td>'
-    +'<td class="num">'+brl(ini)+'</td></tr>';
-  movs.forEach(m=>{
+  // Saldo inicial do mês = saldo cadastrado + tudo que foi realizado antes do mês.
+  let abertura=ini;
+  movs.forEach(m=>{ if(mesDoMov(m)<comp){ const v=parseValor(m.Valor); abertura+=((m.Tipo||'')==='ENTRADA'?v:-v); } });
+  const doMes=movs.filter(m=>mesDoMov(m)===comp);
+  let saldo=abertura, entradas=0, saidas=0;
+  let linhas='<tr class="ext-abertura"><td colspan="'+(consolidado()?5:4)+'">Saldo inicial ('+labelMesAno(comp)+')</td>'
+    +'<td class="num '+(abertura<0?'v-neg':'')+'">'+brl(abertura)+'</td></tr>';
+  doMes.forEach(m=>{
     const ent=(m.Tipo||'')==='ENTRADA';
     const v=parseValor(m.Valor);
     if(ent){ saldo+=v; entradas+=v; } else { saldo-=v; saidas+=v; }
@@ -1470,10 +1501,13 @@ function renderExtrato(){
       +'<td class="num v-out">'+(ent?'':brl(v))+'</td>'
       +'<td class="num '+(saldo<0?'v-neg':'')+'">'+brl(saldo)+'</td></tr>';
   });
-  resumo.innerHTML=card('Saldo inicial',brl(ini),'')
+  if(!doMes.length){
+    linhas+='<tr><td colspan="'+(consolidado()?7:6)+'" class="vazio">Nenhuma movimentação realizada neste mês.</td></tr>';
+  }
+  resumo.innerHTML=card('Saldo inicial',brl(abertura),abertura<0?'v-neg':'')
     +card('Entradas',brl(entradas),'v-in')
     +card('Saídas',brl(saidas),'v-out')
-    +card('Saldo atual',brl(saldo),saldo<0?'v-neg':'v-liq');
+    +card('Saldo final',brl(saldo),saldo<0?'v-neg':'v-liq');
   tbl.innerHTML='<table class="grid"><thead><tr><th>Data</th><th>Descrição</th>'
     +(consolidado()?'<th>Pessoa</th>':'')
     +'<th>Origem</th><th class="num">Entrada</th><th class="num">Saída</th>'
