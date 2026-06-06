@@ -1608,7 +1608,7 @@ function renderExtrato(){
   movs.forEach(m=>{ if(mesDoMov(m)<comp){ const v=parseValor(m.Valor); abertura+=((m.Tipo||'')==='ENTRADA'?v:-v); } });
   const doMes=movs.filter(m=>mesDoMov(m)===comp);
   let saldo=abertura, entradas=0, saidas=0;
-  let linhas='<tr class="ext-abertura"><td colspan="'+(consolidado()?5:4)+'">Saldo inicial ('+labelMesAno(comp)+')</td>'
+  let linhas='<tr class="ext-abertura"><td colspan="'+(consolidado()?6:5)+'">Saldo inicial ('+labelMesAno(comp)+')</td>'
     +'<td class="num '+(abertura<0?'v-neg':'')+'">'+brl(abertura)+'</td></tr>';
   doMes.forEach(m=>{
     const ent=(m.Tipo||'')==='ENTRADA';
