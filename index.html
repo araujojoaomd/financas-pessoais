@@ -185,19 +185,21 @@ tbody tr:hover{background:#F3F8F5}
 <div class="layout">
 <aside class="sidebar" id="sidebar">
   <button class="side-toggle" onclick="toggleSidebar()" title="Recolher / expandir menu">☰</button>
-  <div class="side-h">Visão</div>
-  <button class="side-item on" data-view="mes" onclick="setView('mes')"><span class="si-ic">📅</span><span class="si-lbl">Mês</span></button>
+  <div class="side-h">Visões</div>
+  <button class="side-item on" data-view="mes" onclick="setView('mes')"><span class="si-ic">📅</span><span class="si-lbl">Controle do Mês</span></button>
   <button class="side-item" data-view="fluxo" onclick="setView('fluxo')"><span class="si-ic">📊</span><span class="si-lbl">Fluxo de Caixa</span></button>
-  <div class="side-h">Cartão</div>
-  <button class="side-item" data-view="cartoes" onclick="setView('cartoes')"><span class="si-ic">🛒</span><span class="si-lbl">Compras no cartão</span></button>
-  <button class="side-item" data-view="faturas" onclick="setView('faturas')"><span class="si-ic">🧾</span><span class="si-lbl">Faturas</span></button>
-  <div class="side-h">Lançamentos</div>
-  <button class="side-item" data-view="recorrentes" onclick="setView('recorrentes')"><span class="si-ic">🔁</span><span class="si-lbl">Recorrentes (cadastro)</span></button>
-  <button class="side-item" data-view="movimentos" onclick="setView('movimentos')"><span class="si-ic">📋</span><span class="si-lbl">Histórico</span></button>
+  <div class="side-h">Receitas</div>
+  <button class="side-item" data-view="recreceitas" onclick="setView('recreceitas')"><span class="si-ic">🔁</span><span class="si-lbl">Receitas Recorrentes</span></button>
+  <div class="side-h">Pagamentos/Compras</div>
+  <button class="side-item" data-view="cartoes" onclick="setView('cartoes')"><span class="si-ic">🛒</span><span class="si-lbl">Compras no Cartão</span></button>
+  <button class="side-item" data-view="recpagamentos" onclick="setView('recpagamentos')"><span class="si-ic">🔁</span><span class="si-lbl">Pagamentos Recorrentes</span></button>
+  <div class="side-h">Situação</div>
   <button class="side-item" data-view="emprestimos" onclick="setView('emprestimos')"><span class="si-ic">🏦</span><span class="si-lbl">Empréstimos</span></button>
-  <div class="side-h">Cadastro</div>
-  <button class="side-item" data-view="contas" onclick="setView('contas')"><span class="si-ic">🏛️</span><span class="si-lbl">Contas bancárias</span></button>
-  <button class="side-item" data-view="cartoescad" onclick="setView('cartoescad')"><span class="si-ic">💳</span><span class="si-lbl">Cartões</span></button>
+  <button class="side-item" data-view="faturas" onclick="setView('faturas')"><span class="si-ic">🧾</span><span class="si-lbl">Fatura dos Cartões</span></button>
+  <button class="side-item" data-view="movimentos" onclick="setView('movimentos')"><span class="si-ic">📋</span><span class="si-lbl">Histórico (extrato)</span></button>
+  <div class="side-h">Cadastros</div>
+  <button class="side-item" data-view="contas" onclick="setView('contas')"><span class="si-ic">🏛️</span><span class="si-lbl">Contas Bancárias</span></button>
+  <button class="side-item" data-view="cartoescad" onclick="setView('cartoescad')"><span class="si-ic">💳</span><span class="si-lbl">Cartões de Crédito</span></button>
   <div class="side-h">Sistema</div>
   <button class="side-item" data-view="config" onclick="setView('config')"><span class="si-ic">⚙️</span><span class="si-lbl">Configurações</span></button>
 </aside>
@@ -273,14 +275,26 @@ tbody tr:hover{background:#F3F8F5}
     <p style="font-size:11.5px;color:#5B6B63;margin-top:10px">A fatura é o que sai do caixa. Se o valor do banco não bater (compra que não entrou, juros, rotativo), some um <b>Ajuste</b>. Pagar a fatura dá baixa em tudo e devolve o limite do cartão.</p>
   </div>
 
-  <!-- RECORRENTES -->
-  <div class="view" id="v-recorrentes">
+  <!-- RECEITAS RECORRENTES -->
+  <div class="view" id="v-recreceitas">
     <div class="toolbar">
-      <h2>Receitas e despesas recorrentes</h2>
+      <h2>Receitas recorrentes</h2>
       <div class="sep"></div>
-      <button class="btn green" onclick="abrirRecorrente()">+ Novo recorrente</button>
+      <button class="btn green" onclick="abrirRecorrente(null,'ENTRADA')">+ Nova receita recorrente</button>
     </div>
-    <div class="tbl-wrap"><div id="recTbl"></div></div>
+    <div class="tbl-wrap"><div id="recRecTbl"></div></div>
+    <p style="font-size:11.5px;color:#5B6B63;margin-top:10px">Rendas que se repetem todo mês (salário, aluguel recebido). No Mês aparecem com botão <b>Receber</b>.</p>
+  </div>
+
+  <!-- PAGAMENTOS RECORRENTES -->
+  <div class="view" id="v-recpagamentos">
+    <div class="toolbar">
+      <h2>Pagamentos recorrentes</h2>
+      <div class="sep"></div>
+      <button class="btn green" onclick="abrirRecorrente(null,'SAÍDA')">+ Novo pagamento recorrente</button>
+    </div>
+    <div class="tbl-wrap"><div id="recPagTbl"></div></div>
+    <p style="font-size:11.5px;color:#5B6B63;margin-top:10px">Despesas fixas mensais (internet, escola, plano de saúde). Marque <b>descontado em folha</b> se sai direto do salário.</p>
   </div>
 
   <!-- MOVIMENTOS -->
@@ -1140,19 +1154,31 @@ async function salvarLancCartao(){
 
 // ===== RECORRENTES =====
 function renderRecorrentes(){
-  const lista = DB.recorrentes.filter(r=>passaPerfil(r.Perfil));
-  if(!lista.length){ document.getElementById('recTbl').innerHTML='<div class="vazio">Nenhum recorrente. Cadastre salários, aluguéis, internet etc.</div>'; return; }
-  let h='<table><thead><tr><th>Tipo</th><th>Grupo</th><th>Descrição</th><th>Categoria</th><th>Pessoa</th><th class="num">Valor padrão</th><th>Dia</th><th>Vigência</th><th>Ativo</th><th></th></tr></thead><tbody>';
-  lista.forEach(r=>{
-    const ent=String(r.Tipo||'').toUpperCase()==='ENTRADA';
-    const tipoCell = ent ? '<span class="pill p-pago">↓ Entrada</span>' : '<span class="pill p-atr">↑ Saída</span>';
-    const folha = String(r.EmFolha||'').toUpperCase()==='SIM' && r.SalarioRef;
-    const sal = folha ? DB.recorrentes.find(x=>x.ID===r.SalarioRef) : null;
-    const grupoCell = esc(r.Grupo) + (folha ? ' <span style="font-size:9.5px;color:#16A34A" title="Descontado do salário '+esc(sal?sal.Descricao:'')+'">⛓ em folha</span>' : '');
-    h+='<tr><td>'+tipoCell+'</td><td>'+grupoCell+'</td><td>'+esc(r.Descricao)+'</td><td>'+esc(ent?'—':r.Categoria)+'</td><td>'+pill(r.Perfil)+'</td><td class="num">'+brl(parseValor(r.ValorPadrao))+'</td><td class="mono">'+esc(ent||folha?'—':r.DiaVenc)+'</td><td class="mono">'+esc(r.VigenciaInicio||'—')+'→'+esc(r.VigenciaFim||'—')+'</td><td>'+esc(r.Ativo||'SIM')+'</td>'
-     +'<td><button class="btn-ic" onclick=\'abrirRecorrente('+JSON.stringify(r.ID)+')\'>✏️</button><button class="btn-ic" onclick=\'excluirRecorrente('+JSON.stringify(r.ID)+')\'>🗑️</button></td></tr>';
-  });
-  document.getElementById('recTbl').innerHTML=h+'</tbody></table>';
+  renderRecLista('ENTRADA','recRecTbl');
+  renderRecLista('SAÍDA','recPagTbl');
+}
+function renderRecLista(tipo, elId){
+  const el=document.getElementById(elId); if(!el) return;
+  const ent = tipo==='ENTRADA';
+  const lista = DB.recorrentes.filter(r=>passaPerfil(r.Perfil) && (String(r.Tipo||'').toUpperCase()==='ENTRADA')===ent);
+  if(!lista.length){ el.innerHTML='<div class="vazio">'+(ent?'Nenhuma receita recorrente. Cadastre salários, aluguéis recebidos etc.':'Nenhum pagamento recorrente. Cadastre internet, escola, plano de saúde etc.')+'</div>'; return; }
+  const acoes=r=>'<td><button class="btn-ic" onclick=\'abrirRecorrente('+JSON.stringify(r.ID)+')\'>✏️</button><button class="btn-ic" onclick=\'excluirRecorrente('+JSON.stringify(r.ID)+')\'>🗑️</button></td>';
+  let h;
+  if(ent){
+    h='<table><thead><tr><th>Grupo de renda</th><th>Descrição</th><th>Pessoa</th><th class="num">Valor padrão</th><th>Conta</th><th>Vigência</th><th>Ativo</th><th></th></tr></thead><tbody>';
+    lista.forEach(r=>{
+      h+='<tr><td>'+esc(r.Grupo)+'</td><td>'+esc(r.Descricao)+'</td><td>'+pill(r.Perfil)+'</td><td class="num">'+brl(parseValor(r.ValorPadrao))+'</td><td>'+esc(r.Conta||'—')+'</td><td class="mono">'+esc(r.VigenciaInicio||'—')+'→'+esc(r.VigenciaFim||'—')+'</td><td>'+esc(r.Ativo||'SIM')+'</td>'+acoes(r)+'</tr>';
+    });
+  } else {
+    h='<table><thead><tr><th>Grupo</th><th>Descrição</th><th>Categoria</th><th>Pessoa</th><th class="num">Valor padrão</th><th>Dia</th><th>Vigência</th><th>Ativo</th><th></th></tr></thead><tbody>';
+    lista.forEach(r=>{
+      const folha = String(r.EmFolha||'').toUpperCase()==='SIM' && r.SalarioRef;
+      const sal = folha ? DB.recorrentes.find(x=>x.ID===r.SalarioRef) : null;
+      const grupoCell = esc(r.Grupo) + (folha ? ' <span style="font-size:9.5px;color:#16A34A" title="Descontado do salário '+esc(sal?sal.Descricao:'')+'">⛓ em folha</span>' : '');
+      h+='<tr><td>'+grupoCell+'</td><td>'+esc(r.Descricao)+'</td><td>'+esc(r.Categoria)+'</td><td>'+pill(r.Perfil)+'</td><td class="num">'+brl(parseValor(r.ValorPadrao))+'</td><td class="mono">'+esc(folha?'—':r.DiaVenc)+'</td><td class="mono">'+esc(r.VigenciaInicio||'—')+'→'+esc(r.VigenciaFim||'—')+'</td><td>'+esc(r.Ativo||'SIM')+'</td>'+acoes(r)+'</tr>';
+    });
+  }
+  el.innerHTML=h+'</tbody></table>';
 }
 // Salários cadastrados (Recorrente · Entrada · grupo SALÁRIO) do perfil ativo — alvo dos consignados.
 function salariosDoPerfil(){
@@ -1164,29 +1190,26 @@ function campoSalarioRef(idEl, sel){
   return fld('Desconta de qual salário?','<select id="'+idEl+'">'+sals.map(s=>'<option value="'+esc(s.ID)+'"'+(s.ID===sel?' selected':'')+'>'+esc(s.Descricao||'Salário')+'</option>').join('')+'</select>');
 }
 let _recCtx=null;
-function abrirRecorrente(id){
+function abrirRecorrente(id, tipoForcado){
   if(!id && consolidado()){ alert('Selecione um perfil (João ou Lívia) para lançar.'); return; }
   const r = id? DB.recorrentes.find(x=>x.ID===id):null;
   _recCtx = r || null;
-  document.getElementById('modalT').textContent = r?'Editar recorrente':'Novo recorrente — '+perfilAtivo;
-  const tipo = (r && String(r.Tipo).toUpperCase()==='ENTRADA')?'ENTRADA':'SAÍDA';
+  const tipo = r ? ((String(r.Tipo).toUpperCase()==='ENTRADA')?'ENTRADA':'SAÍDA')
+                 : ((tipoForcado==='ENTRADA')?'ENTRADA':'SAÍDA');
+  const ent = tipo==='ENTRADA';
+  document.getElementById('modalT').textContent = r
+    ? (ent?'Editar receita recorrente':'Editar pagamento recorrente')
+    : (ent?'Nova receita recorrente — '+perfilAtivo:'Novo pagamento recorrente — '+perfilAtivo);
   document.getElementById('modalC').innerHTML =
     '<input type="hidden" id="r-id" value="'+(r?esc(r.ID):'')+'">'
    +'<input type="hidden" id="r-tipo" value="'+tipo+'">'
-   +'<div class="segbtns">'
-     +'<button type="button" id="r-bt-saida" class="segbtn" onclick="setRecTipo(\'SAÍDA\')">↑ Saída (despesa)</button>'
-     +'<button type="button" id="r-bt-entrada" class="segbtn" onclick="setRecTipo(\'ENTRADA\')">↓ Entrada (renda)</button>'
-   +'</div>'
    +'<div id="r-campos"></div>'
    +'<div class="acoes"><button class="btn-ghost" onclick="fecharModal()">Cancelar</button><button class="btn green" id="r-save" onclick="salvarRecorrente()">Salvar</button></div>';
   renderRecorrenteCampos(tipo);
   abrirModal();
 }
-function setRecTipo(t){ document.getElementById('r-tipo').value=t; renderRecorrenteCampos(t); }
 function renderRecorrenteCampos(tipo){
   const r=_recCtx;
-  document.getElementById('r-bt-saida').classList.toggle('on',tipo==='SAÍDA');
-  document.getElementById('r-bt-entrada').classList.toggle('on',tipo==='ENTRADA');
   let h='<div class="grid full">'+fld('Descrição','<input id="r-desc" value="'+(r?esc(r.Descricao):'')+'" placeholder="'+(tipo==='ENTRADA'?'Ex.: Salário Prefeitura':'Ex.: Aluguel Apt Parnamirim')+'">')+'</div>';
   if(tipo==='ENTRADA'){
     h+='<div class="grid">'
