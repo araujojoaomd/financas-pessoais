@@ -298,6 +298,7 @@ tbody tr:hover{background:#F3F8F5}
       <div class="sep"></div>
       <button class="btn green" onclick="abrirEmprestimo()">+ Novo empréstimo</button>
     </div>
+    <div class="resumo" id="empResumo" style="grid-template-columns:repeat(2,1fr)"></div>
     <div class="tbl-wrap"><div id="empTbl"></div></div>
   </div>
 
@@ -346,6 +347,8 @@ const GRUPOS_SAIDA = ['CARRO','APT PARNAMIRIM','FLAT CARNEIROS','APT JAQUEIRA','
 const NAT_LABEL = {COMPRA:'Compra', PAGAMENTO:'Pagamento', PIX_PROPRIO:'PIX'};
 const GRUPOS_ENTRADA = ['RENDAS','ADIANT. CARTÃO'];
 const CATEGORIAS = ['GASTO PESSOAL','OBRAS CASA DE ALDEIA','SAQUE','MORADIA','TRANSPORTE','ALIMENTAÇÃO','SAÚDE','OUTROS'];
+const TIPOS_EMPRESTIMO = ['Consignado','Financiamento Imobiliário','Veículo','Empréstimo Pessoal','Outros'];
+function ehConsignado(e){ return String(e&&e.Tipo||'').toUpperCase().indexOf('CONSIGN')>=0; }
 const PERFIS = ['JOÃO','LÍVIA'];
 const EMAIL_PERFIL = { 'araujo.joaomd@gmail.com':'JOÃO', 'joao.marcelo@recife.pe.gov.br':'JOÃO' /*, 'email-da-livia@gmail.com':'LÍVIA' */ };
 // Cores e fotos por perfil. Cole a URL de uma foto (quadrada de preferência) em PERFIL_FOTO; vazio = mostra a inicial.
@@ -444,7 +447,7 @@ function demo(){
       {ID:'MV-5',Codigo:'MOV-0003',Perfil:'LÍVIA',Competencia:c,CompGasto:c,Data:'',Tipo:'SAÍDA',Grupo:'GASTOS PESSOAIS',Categoria:'GASTO PESSOAL',Conta:'Conta Lívia (Inter)',Descricao:'Compras diversas',Valor:1500.00,Status:'PAGO',Origem:'MANUAL',Ref:''}
     ],
     emprestimos:[
-      {ID:'EM-1',Perfil:'JOÃO',Instituicao:'Bradesco',Contrato:'526274186',DataContratacao:'15/07/2024',ValorContratado:120000,TxNominal:'1,8',TxEfetiva:'2,1',ValorParcela:3200.00,QtdParcelas:60,ParcelasPagas:20,CompetenciaInicial:compAdd(c,-20)}
+      {ID:'EM-1',Perfil:'JOÃO',Instituicao:'Bradesco',Contrato:'526274186',DataContratacao:'15/07/2024',ValorContratado:120000,TxNominal:'1,8',TxEfetiva:'2,1',ValorParcela:3200.00,QtdParcelas:60,ParcelasPagas:20,CompetenciaInicial:compAdd(c,-20),Tipo:'Consignado'}
     ],
     config:[]
   };
@@ -568,15 +571,23 @@ function eventos(){
     }
   });
   // Empréstimos -> só as parcelas AINDA NÃO pagas (a partir de ParcelasPagas). Gasto=caixa no mesmo mês.
+  // Consignado é descontado em folha -> entra como REDUTOR da renda (entrada negativa em RENDAS), não como despesa.
   DB.emprestimos.forEach(e=>{
     const qtd=Math.max(1,parseInt(e.QtdParcelas)||1); const ini=e.CompetenciaInicial; if(!ini) return;
     const jaPagas=Math.max(0,parseInt(e.ParcelasPagas)||0);
     const valor=parseValor(e.ValorParcela);
+    const consig=ehConsignado(e);
     for(let k=jaPagas;k<qtd;k++){
       const cc=compAdd(ini,k);
-      evs.push({tipo:'SAÍDA',grupo:'EMPRÉSTIMOS',categoria:e.Instituicao||'',perfil:e.Perfil||'JOÃO',conta:e.Instituicao||'',
-        descricao:(e.Instituicao||'Empréstimo')+' '+(e.Contrato||'')+' ('+(k+1)+'/'+qtd+')',valor,status:'PREVISTO',origem:'EMPRÉSTIMO',
-        ref:'EMP:'+e.ID+':'+k, compGasto:cc, compCaixa:cc, fonte:true, movId:null});
+      if(consig){
+        evs.push({tipo:'ENTRADA',grupo:'RENDAS',categoria:e.Instituicao||'',perfil:e.Perfil||'JOÃO',conta:'',
+          descricao:'Consignado '+(e.Instituicao||'')+' (desconto em folha)',valor:-valor,status:'PREVISTO',origem:'CONSIGNADO',
+          ref:'EMP:'+e.ID+':'+k, compGasto:cc, compCaixa:cc, fonte:true, movId:null});
+      } else {
+        evs.push({tipo:'SAÍDA',grupo:'EMPRÉSTIMOS',categoria:e.Instituicao||'',perfil:e.Perfil||'JOÃO',conta:e.Instituicao||'',
+          descricao:(e.Instituicao||'Empréstimo')+' '+(e.Contrato||'')+' ('+(k+1)+'/'+qtd+')',valor,status:'PREVISTO',origem:'EMPRÉSTIMO',
+          ref:'EMP:'+e.ID+':'+k, compGasto:cc, compCaixa:cc, fonte:true, movId:null});
+      }
     }
   });
   // Recorrentes -> 1 por mês (gasto e caixa no mesmo mês)
@@ -701,7 +712,8 @@ function mudarMes(d){ const el=document.getElementById('mesComp'); const novo=co
 function linhaMes(l,i){
   const st=(l.status||'PREVISTO').toUpperCase();
   let statusCell, acaoCell;
-  if(st==='PAGO'){ statusCell='<span class="pill p-pago">'+(l.tipo==='ENTRADA'?'RECEBIDO':'PAGO')+'</span>'; acaoCell='<span style="font-size:11px;color:#5B6B63">'+esc(l.conta||'—')+'</span> <button class="btn-ic" onclick=\'desfazerItem('+i+')\' title="Desfazer">↩︎</button>'; }
+  if(l.origem==='CONSIGNADO'){ statusCell='<span class="pill p-comum">em folha</span>'; acaoCell='<span style="font-size:11px;color:#5B6B63">automático</span>'; }
+  else if(st==='PAGO'){ statusCell='<span class="pill p-pago">'+(l.tipo==='ENTRADA'?'RECEBIDO':'PAGO')+'</span>'; acaoCell='<span style="font-size:11px;color:#5B6B63">'+esc(l.conta||'—')+'</span> <button class="btn-ic" onclick=\'desfazerItem('+i+')\' title="Desfazer">↩︎</button>'; }
   else if(st==='PAGO_CARTAO'){ statusCell='<span class="pill p-comum">pago c/ cartão</span>'; acaoCell='<button class="btn-ic" onclick=\'desfazerItem('+i+')\' title="Desfazer">↩︎</button>'; }
   else { statusCell='<span class="pill p-prev">PREVISTO</span>'; acaoCell='<button class="btn-ic" style="background:#16A34A;color:#fff;border-color:#16A34A" onclick="abrirPagarDespesa('+i+')">'+(l.tipo==='ENTRADA'?'Receber':'Pagar')+'</button>'; }
   return '<tr><td>'+esc(l.descricao)+'</td><td>'+esc(l.grupo)+'</td><td>'+pill(l.perfil)+'</td><td class="num">'+brl(l.valor)+'</td><td>'+statusCell+'</td><td>'+acaoCell+'</td></tr>';
@@ -1155,15 +1167,22 @@ function parcelasPagasEmp(e){
 }
 function renderEmprestimos(){
   const lista=DB.emprestimos.filter(e=>passaPerfil(e.Perfil));
-  if(!lista.length){ document.getElementById('empTbl').innerHTML='<div class="vazio">Nenhum empréstimo/consignado cadastrado.</div>'; return; }
-  let h='<table><thead><tr><th>Instituição</th><th>Contrato</th><th>Perfil</th><th>Contratação</th><th class="num">Valor contratado</th><th class="num">Parcela</th><th>Parcelas</th><th>1ª comp.</th><th class="num">Saldo estimado</th><th></th></tr></thead><tbody>';
+  const elT=document.getElementById('empTbl'), elR=document.getElementById('empResumo');
+  if(elR) elR.innerHTML='';
+  if(!lista.length){ elT.innerHTML='<div class="vazio">Nenhum empréstimo/consignado cadastrado.</div>'; return; }
+  // totalizadores
+  let parcelaMensal=0, saldoDevedor=0;
+  lista.forEach(e=>{ const qtd=parseInt(e.QtdParcelas)||0, vp=parseValor(e.ValorParcela), rest=Math.max(0,qtd-parcelasPagasEmp(e)); if(rest>0) parcelaMensal+=vp; saldoDevedor+=vp*rest; });
+  if(elR) elR.innerHTML = card('Parcela mensal (total)',brl(parcelaMensal),'v-out') + card('Saldo devedor (total)',brl(saldoDevedor),'v-neg');
+  let h='<table><thead><tr><th>Tipo</th><th>Instituição</th><th>Contrato</th><th>Perfil</th><th class="num">Parcela</th><th>Parcelas</th><th class="num">Saldo devedor</th><th></th></tr></thead><tbody>';
   lista.forEach(e=>{
     const qtd=parseInt(e.QtdParcelas)||0, vp=parseValor(e.ValorParcela);
     const pagas=parcelasPagasEmp(e);
-    h+='<tr><td>'+esc(e.Instituicao)+'</td><td class="mono">'+esc(e.Contrato)+'</td><td>'+pill(e.Perfil)+'</td><td class="mono">'+esc(e.DataContratacao)+'</td><td class="num">'+brl(parseValor(e.ValorContratado))+'</td><td class="num">'+brl(vp)+'</td><td class="mono">'+pagas+'/'+qtd+'</td><td class="mono">'+esc(e.CompetenciaInicial)+'</td><td class="num">'+brl(vp*Math.max(0,qtd-pagas))+'</td>'
+    const tag = ehConsignado(e)? ' <span style="font-size:9.5px;color:#16A34A" title="Reduz o salário">↓ salário</span>':'';
+    h+='<tr><td>'+esc(e.Tipo||'—')+tag+'</td><td>'+esc(e.Instituicao)+'</td><td class="mono">'+esc(e.Contrato)+'</td><td>'+pill(e.Perfil)+'</td><td class="num">'+brl(vp)+'</td><td class="mono">'+pagas+'/'+qtd+'</td><td class="num" style="font-weight:600">'+brl(vp*Math.max(0,qtd-pagas))+'</td>'
      +'<td><button class="btn-ic" onclick=\'abrirEmprestimo('+JSON.stringify(e.ID)+')\'>✏️</button><button class="btn-ic" onclick=\'excluirReg("Emprestimos",'+JSON.stringify(e.ID)+')\'>🗑️</button></td></tr>';
   });
-  document.getElementById('empTbl').innerHTML=h+'</tbody></table>';
+  elT.innerHTML=h+'</tbody></table>';
 }
 function abrirEmprestimo(id){
   if(!id && consolidado()){ alert('Selecione um perfil (João ou Lívia) para lançar.'); return; }
@@ -1171,7 +1190,8 @@ function abrirEmprestimo(id){
   document.getElementById('modalT').textContent=e?'Editar empréstimo':'Novo empréstimo — '+perfilAtivo;
   document.getElementById('modalC').innerHTML =
     '<input type="hidden" id="e-id" value="'+(e?esc(e.ID):'')+'">'
-   +'<div class="grid">'+fld('Instituição','<input id="e-inst" value="'+(e?esc(e.Instituicao):'')+'">')+fld('Contrato','<input id="e-contrato" value="'+(e?esc(e.Contrato):'')+'">')+'</div>'
+   +'<div class="grid">'+fld('Tipo','<select id="e-tipo">'+TIPOS_EMPRESTIMO.map(t=>opt(t,e&&e.Tipo)).join('')+'</select>')+fld('Instituição','<input id="e-inst" value="'+(e?esc(e.Instituicao):'')+'">')+'</div>'
+   +'<div class="grid full">'+fld('Contrato','<input id="e-contrato" value="'+(e?esc(e.Contrato):'')+'">')+'</div>'
    +'<div class="grid">'+fld('Data contratação','<input type="date" id="e-data" value="'+(e?paraDate(e.DataContratacao):'')+'">')+fld('Valor contratado (R$)','<input id="e-valctr" inputmode="decimal" value="'+(e?String(parseValor(e.ValorContratado)).replace('.',','):'')+'">')+'</div>'
    +'<div class="grid">'+fld('Tx juros nominal (%)','<input id="e-txn" value="'+(e?esc(e.TxNominal):'')+'">')+fld('Tx juros efetiva (%)','<input id="e-txe" value="'+(e?esc(e.TxEfetiva):'')+'">')+'</div>'
    +'<div class="grid">'+fld('Valor da parcela (R$)','<input id="e-valpar" inputmode="decimal" value="'+(e?String(parseValor(e.ValorParcela)).replace('.',','):'')+'">')+fld('Qtd parcelas','<input id="e-qtd" type="number" min="1" value="'+(e?parseInt(e.QtdParcelas)||'':'')+'">')+'</div>'
@@ -1183,7 +1203,7 @@ async function salvarEmprestimo(){
   const reg={ID:document.getElementById('e-id').value||undefined,Instituicao:document.getElementById('e-inst').value.trim(),Contrato:document.getElementById('e-contrato').value.trim(),
     DataContratacao:deDate(document.getElementById('e-data').value),ValorContratado:parseValor(document.getElementById('e-valctr').value),
     TxNominal:document.getElementById('e-txn').value.trim(),TxEfetiva:document.getElementById('e-txe').value.trim(),ValorParcela:parseValor(document.getElementById('e-valpar').value),
-    QtdParcelas:parseInt(document.getElementById('e-qtd').value)||0,ParcelasPagas:parseInt(document.getElementById('e-pagas').value)||0,CompetenciaInicial:document.getElementById('e-comp').value.trim(),Perfil:perfilAtivo};
+    QtdParcelas:parseInt(document.getElementById('e-qtd').value)||0,ParcelasPagas:parseInt(document.getElementById('e-pagas').value)||0,CompetenciaInicial:document.getElementById('e-comp').value.trim(),Tipo:document.getElementById('e-tipo').value,Perfil:perfilAtivo};
   if(!reg.Instituicao){ alert('Preencha a instituição.'); return; }
   await salvarReg('Emprestimos',reg,'e-save');
 }
