@@ -108,6 +108,9 @@ tbody tr:hover{background:#F3F8F5}
 .preview .ph{font-weight:600;color:#0F3D2E;margin-bottom:6px;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
 .preview .pr{display:flex;justify-content:space-between;padding:2px 0;font-family:'DM Mono',monospace;color:#13241B}
 .acoes{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
+.segbtns{display:flex;gap:8px;margin-bottom:14px}
+.segbtn{flex:1;padding:10px;border:1px solid #DCE4E0;background:#fff;border-radius:10px;font-size:13px;font-weight:600;color:#5B6B63;cursor:pointer;font-family:'DM Sans',sans-serif;transition:.12s}
+.segbtn.on{border-color:var(--pc,#16A34A);background:var(--pc,#16A34A);color:#fff}
 /* LOGIN */
 .login{position:fixed;inset:0;background:linear-gradient(135deg,#0F3D2E,#16A34A);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px}
 .login-card{background:#fff;padding:36px 40px;border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.25);max-width:380px;width:100%;text-align:center}
@@ -346,6 +349,7 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbw6UxbDugNHePIk55EWr_Xz
 const GRUPOS_SAIDA = ['CARRO','APT PARNAMIRIM','FLAT CARNEIROS','APT JAQUEIRA','CASA ALDEIA','GASTOS PESSOAIS','SAQUE/PIX CARTÃO','PAGAMENTO CARTÃO','AJUSTE CARTÃO','EMPRÉSTIMOS','OUTROS'];
 const NAT_LABEL = {COMPRA:'Compra', PAGAMENTO:'Pagamento', PIX_PROPRIO:'PIX'};
 const GRUPOS_ENTRADA = ['RENDAS','ADIANT. CARTÃO'];
+const GRUPOS_RENDA = ['SALÁRIO','OUTRAS RENDAS'];
 const CATEGORIAS = ['GASTO PESSOAL','OBRAS CASA DE ALDEIA','SAQUE','MORADIA','TRANSPORTE','ALIMENTAÇÃO','SAÚDE','OUTROS'];
 const TIPOS_EMPRESTIMO = ['Consignado','Financiamento Imobiliário','Veículo','Empréstimo Pessoal','Outros'];
 function ehConsignado(e){ return String(e&&e.Tipo||'').toUpperCase().indexOf('CONSIGN')>=0; }
@@ -433,8 +437,9 @@ function demo(){
       {ID:'CP-5',Codigo:'PIX-0001',Natureza:'PIX_PROPRIO',Perfil:'JOÃO',Cartao:'VISA Bradesco João',DataCompra:'08/'+c.slice(5)+'/'+c.slice(0,4),Descricao:'PIX para a conta',Grupo:'SAQUE/PIX CARTÃO',Categoria:'SAQUE',ValorParcela:3500.00,QtdParcelas:3,CompetenciaInicial:c,AlvoRef:'',Criado:''}
     ],
     recorrentes:[
-      {ID:'RC-1',Perfil:'JOÃO',Tipo:'ENTRADA',Grupo:'RENDAS',Descricao:'Salário Prefeitura',Categoria:'',Conta:'Conta Corrente João (BB)',ValorPadrao:35179.78,DiaVenc:5,VigenciaInicio:'',VigenciaFim:'',Ativo:'SIM'},
-      {ID:'RC-2',Perfil:'JOÃO',Tipo:'ENTRADA',Grupo:'RENDAS',Descricao:'Aluguel Apt Parnamirim (recebido)',Categoria:'',Conta:'',ValorPadrao:3700.00,DiaVenc:10,VigenciaInicio:'',VigenciaFim:'',Ativo:'SIM'},
+      {ID:'RC-1',Perfil:'JOÃO',Tipo:'ENTRADA',Grupo:'SALÁRIO',Descricao:'Salário Prefeitura',Categoria:'',Conta:'Conta Corrente João (BB)',ValorPadrao:35179.78,DiaVenc:5,VigenciaInicio:'',VigenciaFim:'',Ativo:'SIM',EmFolha:'',SalarioRef:''},
+      {ID:'RC-2',Perfil:'JOÃO',Tipo:'ENTRADA',Grupo:'OUTRAS RENDAS',Descricao:'Aluguel Apt Parnamirim (recebido)',Categoria:'',Conta:'',ValorPadrao:3700.00,DiaVenc:10,VigenciaInicio:'',VigenciaFim:'',Ativo:'SIM',EmFolha:'',SalarioRef:''},
+      {ID:'RC-7',Perfil:'JOÃO',Tipo:'SAÍDA',Grupo:'GASTOS PESSOAIS',Descricao:'Plano de saúde (Geap)',Categoria:'SAÚDE',Conta:'',ValorPadrao:980.00,DiaVenc:0,VigenciaInicio:'',VigenciaFim:'',Ativo:'SIM',EmFolha:'SIM',SalarioRef:'RC-1'},
       {ID:'RC-3',Perfil:'JOÃO',Tipo:'SAÍDA',Grupo:'APT PARNAMIRIM',Descricao:'Internet TIM',Categoria:'MORADIA',Conta:'',ValorPadrao:129.99,DiaVenc:8,VigenciaInicio:'',VigenciaFim:'',Ativo:'SIM'},
       {ID:'RC-4',Perfil:'JOÃO',Tipo:'SAÍDA',Grupo:'CASA ALDEIA',Descricao:'Diarista (Maria)',Categoria:'MORADIA',Conta:'',ValorPadrao:600.00,DiaVenc:5,VigenciaInicio:'',VigenciaFim:'',Ativo:'SIM'},
       {ID:'RC-5',Perfil:'JOÃO',Tipo:'SAÍDA',Grupo:'CARRO',Descricao:'Prestação BYD Dolphin',Categoria:'TRANSPORTE',Conta:'',ValorPadrao:2955.43,DiaVenc:15,VigenciaInicio:'',VigenciaFim:compAdd(c,8),Ativo:'SIM'},
@@ -447,7 +452,7 @@ function demo(){
       {ID:'MV-5',Codigo:'MOV-0003',Perfil:'LÍVIA',Competencia:c,CompGasto:c,Data:'',Tipo:'SAÍDA',Grupo:'GASTOS PESSOAIS',Categoria:'GASTO PESSOAL',Conta:'Conta Lívia (Inter)',Descricao:'Compras diversas',Valor:1500.00,Status:'PAGO',Origem:'MANUAL',Ref:''}
     ],
     emprestimos:[
-      {ID:'EM-1',Perfil:'JOÃO',Instituicao:'Bradesco',Contrato:'526274186',DataContratacao:'15/07/2024',ValorContratado:120000,TxNominal:'1,8',TxEfetiva:'2,1',ValorParcela:3200.00,QtdParcelas:60,ParcelasPagas:20,CompetenciaInicial:compAdd(c,-20),Tipo:'Consignado'}
+      {ID:'EM-1',Perfil:'JOÃO',Instituicao:'Bradesco',Contrato:'526274186',DataContratacao:'15/07/2024',ValorContratado:120000,TxNominal:'1,8',TxEfetiva:'2,1',ValorParcela:3200.00,QtdParcelas:60,ParcelasPagas:20,CompetenciaInicial:compAdd(c,-20),Tipo:'Consignado',SalarioRef:'RC-1'}
     ],
     config:[]
   };
@@ -556,6 +561,24 @@ function competenciaVencimento(card, dataBR){
 // Monta a lista de EVENTOS, cada um com duas competências:
 //  compGasto  = quando o gasto aconteceu (regime de competência)
 //  compCaixa  = quando o dinheiro sai/entra de fato (regime de caixa / vencimento da fatura)
+// Descontos vinculados a um salário (recorrente Entrada·SALÁRIO) numa competência:
+// consignados (Emprestimos·SalarioRef) + despesas "em folha" (Recorrentes·EmFolha·SalarioRef).
+function descontosSalario(salId, comp){
+  const rows=[]; let total=0;
+  DB.emprestimos.forEach(e=>{
+    if(!ehConsignado(e) || e.SalarioRef!==salId) return;
+    const qtd=Math.max(1,parseInt(e.QtdParcelas)||1); const ini=e.CompetenciaInicial; if(!ini) return;
+    const jaPagas=Math.max(0,parseInt(e.ParcelasPagas)||0);
+    for(let k=jaPagas;k<qtd;k++){ if(compAdd(ini,k)===comp){ const v=parseValor(e.ValorParcela); total+=v; rows.push({descricao:'Consignado '+(e.Instituicao||''), valor:v}); break; } }
+  });
+  DB.recorrentes.forEach(r=>{
+    if(String(r.EmFolha||'').toUpperCase()!=='SIM' || r.SalarioRef!==salId) return;
+    if(String(r.Ativo).toUpperCase()==='NÃO'||String(r.Ativo).toUpperCase()==='NAO') return;
+    const vi=r.VigenciaInicio||'0000-00', vf=r.VigenciaFim||'9999-99';
+    if(comp>=vi && comp<=vf){ const v=parseValor(r.ValorPadrao); total+=v; rows.push({descricao:(r.Descricao||'')+' (folha)', valor:v}); }
+  });
+  return {total, rows};
+}
 function eventos(){
   const evs=[];
   const cardByName={}; DB.cartoes.forEach(c=>cardByName[c.Nome]=c);
@@ -571,35 +594,42 @@ function eventos(){
     }
   });
   // Empréstimos -> só as parcelas AINDA NÃO pagas (a partir de ParcelasPagas). Gasto=caixa no mesmo mês.
-  // Consignado é descontado em folha -> entra como REDUTOR da renda (entrada negativa em RENDAS), não como despesa.
+  // Consignado NÃO vira evento aqui: é absorvido no salário líquido (ver recorrentes/descontosSalario).
   DB.emprestimos.forEach(e=>{
+    if(ehConsignado(e)) return;
     const qtd=Math.max(1,parseInt(e.QtdParcelas)||1); const ini=e.CompetenciaInicial; if(!ini) return;
     const jaPagas=Math.max(0,parseInt(e.ParcelasPagas)||0);
     const valor=parseValor(e.ValorParcela);
-    const consig=ehConsignado(e);
     for(let k=jaPagas;k<qtd;k++){
       const cc=compAdd(ini,k);
-      if(consig){
-        evs.push({tipo:'ENTRADA',grupo:'RENDAS',categoria:e.Instituicao||'',perfil:e.Perfil||'JOÃO',conta:'',
-          descricao:'Consignado '+(e.Instituicao||'')+' (desconto em folha)',valor:-valor,status:'PREVISTO',origem:'CONSIGNADO',
-          ref:'EMP:'+e.ID+':'+k, compGasto:cc, compCaixa:cc, fonte:true, movId:null});
-      } else {
-        evs.push({tipo:'SAÍDA',grupo:'EMPRÉSTIMOS',categoria:e.Instituicao||'',perfil:e.Perfil||'JOÃO',conta:e.Instituicao||'',
-          descricao:(e.Instituicao||'Empréstimo')+' '+(e.Contrato||'')+' ('+(k+1)+'/'+qtd+')',valor,status:'PREVISTO',origem:'EMPRÉSTIMO',
-          ref:'EMP:'+e.ID+':'+k, compGasto:cc, compCaixa:cc, fonte:true, movId:null});
-      }
+      evs.push({tipo:'SAÍDA',grupo:'EMPRÉSTIMOS',categoria:e.Instituicao||'',perfil:e.Perfil||'JOÃO',conta:e.Instituicao||'',
+        descricao:(e.Instituicao||'Empréstimo')+' '+(e.Contrato||'')+' ('+(k+1)+'/'+qtd+')',valor,status:'PREVISTO',origem:'EMPRÉSTIMO',
+        ref:'EMP:'+e.ID+':'+k, compGasto:cc, compCaixa:cc, fonte:true, movId:null});
     }
   });
-  // Recorrentes -> 1 por mês (gasto e caixa no mesmo mês)
+  // Recorrentes -> 1 por mês (gasto e caixa no mesmo mês).
+  // SALÁRIO sai LÍQUIDO (bruto − consignados − descontos em folha vinculados), com o detalhamento anexado.
+  // Itens "descontado em folha" não viram saída: já estão dentro do líquido do salário.
   const ji=compAdd(compAtual(),-12), jf=compAdd(compAtual(),24);
   DB.recorrentes.forEach(r=>{
     if(String(r.Ativo).toUpperCase()==='NÃO'||String(r.Ativo).toUpperCase()==='NAO') return;
+    if(String(r.EmFolha||'').toUpperCase()==='SIM' && r.SalarioRef) return; // absorvido no salário
+    const ehSalario = String(r.Tipo||'').toUpperCase()==='ENTRADA' && String(r.Grupo||'').toUpperCase()==='SALÁRIO';
     const vi=r.VigenciaInicio||ji, vf=r.VigenciaFim||jf;
     let c = vi>ji? vi: ji;
     while(c<=jf && c<=vf){
-      evs.push({tipo:r.Tipo||'SAÍDA',grupo:r.Grupo||'OUTROS',categoria:r.Categoria||'',perfil:r.Perfil||'JOÃO',conta:r.Conta||'',
-        descricao:r.Descricao||'',valor:parseValor(r.ValorPadrao),status:'PREVISTO',origem:'RECORRENTE',
-        ref:'REC:'+r.ID+':'+c, compGasto:c, compCaixa:c, fonte:true, movId:null});
+      if(ehSalario){
+        const bruto=parseValor(r.ValorPadrao);
+        const d=descontosSalario(r.ID, c);
+        evs.push({tipo:'ENTRADA',grupo:'SALÁRIO',categoria:'',perfil:r.Perfil||'JOÃO',conta:r.Conta||'',
+          descricao:r.Descricao||'',valor:bruto-d.total,status:'PREVISTO',origem:'RECORRENTE',
+          recId:r.ID, _bruto:bruto, _consig:d.total, _pct:(bruto>0?d.total/bruto*100:0), _descRows:d.rows,
+          ref:'REC:'+r.ID+':'+c, compGasto:c, compCaixa:c, fonte:true, movId:null});
+      } else {
+        evs.push({tipo:r.Tipo||'SAÍDA',grupo:r.Grupo||'OUTROS',categoria:r.Categoria||'',perfil:r.Perfil||'JOÃO',conta:r.Conta||'',
+          descricao:r.Descricao||'',valor:parseValor(r.ValorPadrao),status:'PREVISTO',origem:'RECORRENTE',
+          recId:r.ID, ref:'REC:'+r.ID+':'+c, compGasto:c, compCaixa:c, fonte:true, movId:null});
+      }
       c=compAdd(c,1);
     }
   });
@@ -734,6 +764,48 @@ function caixaMes(nome, itens, cor){
   }
   return h+'</div>';
 }
+// Caixa de Entradas: salários aparecem como linha expansível (bruto · −consignados (%) · líquido).
+let mesSalAberto={};
+function toggleSalario(rid){ mesSalAberto[rid]=!mesSalAberto[rid]; renderMes(); }
+function caixaMesEntradas(itens){
+  if(!itens.length) return '';
+  const total=itens.reduce((s,l)=>s+l.valor,0);
+  const feitos=itens.filter(l=>(l.status||'PREVISTO').toUpperCase()!=='PREVISTO').length;
+  const aberto = mesGruposAbertos['Entradas']!==false;
+  let h='<div class="grp-box"><div class="grp-head" onclick="toggleGrupoMes(\'Entradas\')">'
+    +'<span class="grp-chev">'+(aberto?'▾':'▸')+'</span><span class="grp-nome">Entradas</span>'
+    +'<span class="grp-cont">'+feitos+'/'+itens.length+'</span>'
+    +'<span class="grp-tot" style="color:#16A34A">'+brl(total)+'</span></div>';
+  if(aberto){
+    h+='<div class="grp-body"><table><thead><tr><th>Descrição</th><th>Grupo</th><th>Pessoa</th><th class="num">Valor</th><th>Status</th><th></th></tr></thead><tbody>';
+    itens.forEach(l=>{ h += (l._descRows && l._descRows.length) ? linhaSalario(l) : linhaMes(l,l._i); });
+    h+='</tbody></table></div>';
+  }
+  return h+'</div>';
+}
+function linhaSalario(l){
+  const rid=l.recId, ab=!!mesSalAberto[rid];
+  const st=(l.status||'PREVISTO').toUpperCase();
+  const stCell = st!=='PREVISTO' ? '<span class="pill p-pago">RECEBIDO</span>' : '<span class="pill p-prev">PREVISTO</span>';
+  const acao = st!=='PREVISTO'
+    ? '<button class="btn-ic" onclick=\'desfazerItem('+l._i+')\' title="Desfazer">↩︎</button>'
+    : '<button class="btn-ic" style="background:#16A34A;color:#fff;border-color:#16A34A" onclick="abrirReceberSalario('+l._i+')" title="Receber o líquido">Receber líq.</button>';
+  let h='<tr style="cursor:pointer" onclick="toggleSalario('+JSON.stringify(rid)+')">'
+    +'<td><span style="color:#16A34A">'+(ab?'▾':'▸')+'</span> '+esc(l.descricao)
+      +'<div style="font-size:11px;color:#5B6B63;margin-top:2px">bruto '+brl(l._bruto)+' · −'+brl(l._consig)+' consignados ('+l._pct.toFixed(1).replace('.',',')+'%)</div></td>'
+    +'<td>SALÁRIO</td><td>'+pill(l.perfil)+'</td>'
+    +'<td class="num" style="font-weight:700;color:#16A34A">'+brl(l.valor)+'<div style="font-size:10px;color:#5B6B63;font-weight:400">líquido</div></td>'
+    +'<td>'+stCell+'</td><td onclick="event.stopPropagation()">'+acao+'</td></tr>';
+  if(ab){
+    h+='<tr style="background:#FAFCFB"><td style="padding-left:26px;color:#16A34A;font-size:12px;font-weight:600">Salário bruto</td><td></td><td></td><td class="num" style="color:#16A34A">'+brl(l._bruto)+'</td><td></td><td></td></tr>';
+    (l._descRows||[]).forEach(d=>{
+      h+='<tr style="background:#FAFCFB"><td style="padding-left:26px;color:#5B6B63;font-size:12px">• '+esc(d.descricao)+'</td><td></td><td></td><td class="num" style="color:#DC2626">−'+brl(d.valor)+'</td><td></td><td></td></tr>';
+    });
+    h+='<tr style="background:#FAFCFB"><td style="padding-left:26px;font-size:12px;font-weight:700">Líquido</td><td></td><td></td><td class="num" style="font-weight:700;color:#16A34A">'+brl(l.valor)+'</td><td></td><td></td></tr>';
+  }
+  return h;
+}
+function abrirReceberSalario(i){ const l=window._mesItens[i]; if(!l) return; abrirPagar({modo:'despesa', titulo:'Receber salário líquido — '+l.descricao, valorPadrao:l.valor, ctx:{l}}); }
 function caixaMesFaturas(faturas, comp){
   if(!faturas.length) return '';
   const total=faturas.reduce((s,f)=>s+f.total,0), falta=faturas.reduce((s,f)=>s+Math.max(0,f.falta),0);
@@ -776,7 +848,7 @@ function renderMes(){
   const ordem=['Recorrentes','Avulsos','Empréstimos'];
   const gs={}; ordem.forEach(g=>gs[g]=[]);
   saidas.forEach(l=>{ gs[grupoOrigemSaida(l.origem)].push(l); });
-  let h = caixaMes('Entradas', entradas, '#16A34A');
+  let h = caixaMesEntradas(entradas);
   ordem.forEach(g=>{ h += caixaMes(g, gs[g], '#DC2626'); });
   h += caixaMesFaturas(faturas, comp);
   document.getElementById('mesTbl').innerHTML = h;
@@ -1053,43 +1125,104 @@ function renderRecorrentes(){
   if(!lista.length){ document.getElementById('recTbl').innerHTML='<div class="vazio">Nenhum recorrente. Cadastre salários, aluguéis, internet etc.</div>'; return; }
   let h='<table><thead><tr><th>Tipo</th><th>Grupo</th><th>Descrição</th><th>Categoria</th><th>Pessoa</th><th class="num">Valor padrão</th><th>Dia</th><th>Vigência</th><th>Ativo</th><th></th></tr></thead><tbody>';
   lista.forEach(r=>{
-    h+='<tr><td>'+esc(r.Tipo)+'</td><td>'+esc(r.Grupo)+'</td><td>'+esc(r.Descricao)+'</td><td>'+esc(r.Categoria)+'</td><td>'+pill(r.Perfil)+'</td><td class="num">'+brl(parseValor(r.ValorPadrao))+'</td><td class="mono">'+esc(r.DiaVenc)+'</td><td class="mono">'+esc(r.VigenciaInicio||'—')+'→'+esc(r.VigenciaFim||'—')+'</td><td>'+esc(r.Ativo||'SIM')+'</td>'
+    const ent=String(r.Tipo||'').toUpperCase()==='ENTRADA';
+    const tipoCell = ent ? '<span class="pill p-pago">↓ Entrada</span>' : '<span class="pill p-atr">↑ Saída</span>';
+    const folha = String(r.EmFolha||'').toUpperCase()==='SIM' && r.SalarioRef;
+    const sal = folha ? DB.recorrentes.find(x=>x.ID===r.SalarioRef) : null;
+    const grupoCell = esc(r.Grupo) + (folha ? ' <span style="font-size:9.5px;color:#16A34A" title="Descontado do salário '+esc(sal?sal.Descricao:'')+'">⛓ em folha</span>' : '');
+    h+='<tr><td>'+tipoCell+'</td><td>'+grupoCell+'</td><td>'+esc(r.Descricao)+'</td><td>'+esc(ent?'—':r.Categoria)+'</td><td>'+pill(r.Perfil)+'</td><td class="num">'+brl(parseValor(r.ValorPadrao))+'</td><td class="mono">'+esc(ent||folha?'—':r.DiaVenc)+'</td><td class="mono">'+esc(r.VigenciaInicio||'—')+'→'+esc(r.VigenciaFim||'—')+'</td><td>'+esc(r.Ativo||'SIM')+'</td>'
      +'<td><button class="btn-ic" onclick=\'abrirRecorrente('+JSON.stringify(r.ID)+')\'>✏️</button><button class="btn-ic" onclick=\'excluirRecorrente('+JSON.stringify(r.ID)+')\'>🗑️</button></td></tr>';
   });
   document.getElementById('recTbl').innerHTML=h+'</tbody></table>';
 }
+// Salários cadastrados (Recorrente · Entrada · grupo SALÁRIO) do perfil ativo — alvo dos consignados.
+function salariosDoPerfil(){
+  return DB.recorrentes.filter(r=> String(r.Tipo||'').toUpperCase()==='ENTRADA' && String(r.Grupo||'').toUpperCase()==='SALÁRIO' && r.Perfil===perfilAtivo);
+}
+function campoSalarioRef(idEl, sel){
+  const sals=salariosDoPerfil();
+  if(!sals.length) return '<p style="font-size:12px;color:#B91C1C;padding:6px 2px;margin:0">⚠ Cadastre primeiro um <b>salário</b> em Recorrentes (Entrada · grupo SALÁRIO) para vincular o desconto.</p><input type="hidden" id="'+idEl+'" value="">';
+  return fld('Desconta de qual salário?','<select id="'+idEl+'">'+sals.map(s=>'<option value="'+esc(s.ID)+'"'+(s.ID===sel?' selected':'')+'>'+esc(s.Descricao||'Salário')+'</option>').join('')+'</select>');
+}
+let _recCtx=null;
 function abrirRecorrente(id){
   if(!id && consolidado()){ alert('Selecione um perfil (João ou Lívia) para lançar.'); return; }
   const r = id? DB.recorrentes.find(x=>x.ID===id):null;
+  _recCtx = r || null;
   document.getElementById('modalT').textContent = r?'Editar recorrente':'Novo recorrente — '+perfilAtivo;
+  const tipo = (r && String(r.Tipo).toUpperCase()==='ENTRADA')?'ENTRADA':'SAÍDA';
   document.getElementById('modalC').innerHTML =
     '<input type="hidden" id="r-id" value="'+(r?esc(r.ID):'')+'">'
-   +'<div class="grid full">'
-     +fld('Tipo','<select id="r-tipo">'+['SAÍDA','ENTRADA'].map(t=>opt(t,r&&r.Tipo)).join('')+'</select>')
+   +'<input type="hidden" id="r-tipo" value="'+tipo+'">'
+   +'<div class="segbtns">'
+     +'<button type="button" id="r-bt-saida" class="segbtn" onclick="setRecTipo(\'SAÍDA\')">↑ Saída (despesa)</button>'
+     +'<button type="button" id="r-bt-entrada" class="segbtn" onclick="setRecTipo(\'ENTRADA\')">↓ Entrada (renda)</button>'
    +'</div>'
-   +'<div class="grid full">'+fld('Descrição','<input id="r-desc" value="'+(r?esc(r.Descricao):'')+'" placeholder="Ex.: Aluguel Apt Parnamirim">')+'</div>'
-   +'<div class="grid">'
-     +fld('Grupo','<select id="r-grupo">'+[...GRUPOS_ENTRADA,...GRUPOS_SAIDA].map(g=>opt(g,r&&r.Grupo)).join('')+'</select>')
-     +fld('Categoria','<select id="r-cat">'+CATEGORIAS.map(g=>opt(g,r&&r.Categoria)).join('')+'</select>')
-   +'</div>'
-   +'<div class="grid">'
-     +fld('Valor padrão (R$)','<input id="r-valor" inputmode="decimal" value="'+(r?String(parseValor(r.ValorPadrao)).replace('.',','):'')+'">')
-     +fld('Dia de vencimento','<input id="r-dia" type="number" min="1" max="31" value="'+(r?esc(r.DiaVenc):'')+'">')
-   +'</div>'
-   +'<div class="grid">'
-     +fld('Vigência início (AAAA-MM)','<input id="r-vi" value="'+(r?esc(r.VigenciaInicio):'')+'" placeholder="opcional">')
-     +fld('Vigência fim (AAAA-MM)','<input id="r-vf" value="'+(r?esc(r.VigenciaFim):'')+'" placeholder="opcional">')
-   +'</div>'
-   +'<div class="grid full">'+fld('Conta padrão (de onde costuma sair/entrar)','<select id="r-conta">'+optsContas(r?r.Conta:contaPadrao())+'</select>')+'</div>'
+   +'<div id="r-campos"></div>'
    +'<div class="acoes"><button class="btn-ghost" onclick="fecharModal()">Cancelar</button><button class="btn green" id="r-save" onclick="salvarRecorrente()">Salvar</button></div>';
+  renderRecorrenteCampos(tipo);
   abrirModal();
 }
+function setRecTipo(t){ document.getElementById('r-tipo').value=t; renderRecorrenteCampos(t); }
+function renderRecorrenteCampos(tipo){
+  const r=_recCtx;
+  document.getElementById('r-bt-saida').classList.toggle('on',tipo==='SAÍDA');
+  document.getElementById('r-bt-entrada').classList.toggle('on',tipo==='ENTRADA');
+  let h='<div class="grid full">'+fld('Descrição','<input id="r-desc" value="'+(r?esc(r.Descricao):'')+'" placeholder="'+(tipo==='ENTRADA'?'Ex.: Salário Prefeitura':'Ex.: Aluguel Apt Parnamirim')+'">')+'</div>';
+  if(tipo==='ENTRADA'){
+    h+='<div class="grid">'
+      +fld('Grupo de renda','<select id="r-grupo">'+GRUPOS_RENDA.map(g=>opt(g,r&&r.Grupo)).join('')+'</select>')
+      +fld('Valor (R$)','<input id="r-valor" inputmode="decimal" value="'+(r?String(parseValor(r.ValorPadrao)).replace('.',','):'')+'">')
+     +'</div>'
+     +'<div class="grid full">'+fld('Conta (onde o dinheiro cai)','<select id="r-conta">'+optsContas(r?r.Conta:contaPadrao())+'</select>')+'</div>'
+     +'<div class="grid">'
+       +fld('Vigência início (AAAA-MM)','<input id="r-vi" value="'+(r?esc(r.VigenciaInicio):'')+'" placeholder="opcional">')
+       +fld('Vigência fim (AAAA-MM)','<input id="r-vf" value="'+(r?esc(r.VigenciaFim):'')+'" placeholder="opcional">')
+     +'</div>'
+     +'<p style="font-size:11.5px;color:#5B6B63;margin:2px 2px 0">Renda não tem categoria nem data — no Mês aparece com botão <b>Receber</b>.</p>';
+  } else {
+    const ef = r && String(r.EmFolha).toUpperCase()==='SIM';
+    h+='<div class="grid">'
+      +fld('Grupo','<select id="r-grupo">'+GRUPOS_SAIDA.map(g=>opt(g,r&&r.Grupo)).join('')+'</select>')
+      +fld('Categoria','<select id="r-cat">'+CATEGORIAS.map(g=>opt(g,r&&r.Categoria)).join('')+'</select>')
+     +'</div>'
+     +'<div class="grid">'
+       +fld('Valor padrão (R$)','<input id="r-valor" inputmode="decimal" value="'+(r?String(parseValor(r.ValorPadrao)).replace('.',','):'')+'">')
+       +fld('Dia de vencimento','<input id="r-dia" type="number" min="1" max="31" value="'+(r?esc(r.DiaVenc):'')+'">')
+     +'</div>'
+     +'<div class="grid full"><label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:4px 0"><input type="checkbox" id="r-folha" '+(ef?'checked':'')+' onchange="toggleRecFolha()"> Descontado em folha (sai do salário, não da conta)</label></div>'
+     +'<div id="r-folha-box" style="display:'+(ef?'block':'none')+'"><div class="grid full">'+campoSalarioRef('r-salref', r&&r.SalarioRef)+'</div></div>'
+     +'<div id="r-conta-box" style="display:'+(ef?'none':'block')+'"><div class="grid full">'+fld('Conta (de onde sai)','<select id="r-conta">'+optsContas(r?r.Conta:contaPadrao())+'</select>')+'</div></div>'
+     +'<div class="grid">'
+       +fld('Vigência início (AAAA-MM)','<input id="r-vi" value="'+(r?esc(r.VigenciaInicio):'')+'" placeholder="opcional">')
+       +fld('Vigência fim (AAAA-MM)','<input id="r-vf" value="'+(r?esc(r.VigenciaFim):'')+'" placeholder="opcional">')
+     +'</div>';
+  }
+  document.getElementById('r-campos').innerHTML=h;
+}
+function toggleRecFolha(){
+  const on=document.getElementById('r-folha').checked;
+  document.getElementById('r-folha-box').style.display=on?'block':'none';
+  document.getElementById('r-conta-box').style.display=on?'none':'block';
+}
 async function salvarRecorrente(){
-  const reg={ID:document.getElementById('r-id').value||undefined,Tipo:document.getElementById('r-tipo').value,Grupo:document.getElementById('r-grupo').value,
-    Descricao:document.getElementById('r-desc').value.trim(),Categoria:document.getElementById('r-cat').value,Perfil:perfilAtivo,
-    Conta:document.getElementById('r-conta').value.trim(),ValorPadrao:parseValor(document.getElementById('r-valor').value),DiaVenc:document.getElementById('r-dia').value,
-    VigenciaInicio:document.getElementById('r-vi').value.trim(),VigenciaFim:document.getElementById('r-vf').value.trim(),Ativo:'SIM'};
+  const tipo=document.getElementById('r-tipo').value;
+  const get=id=>{const e=document.getElementById(id); return e?e.value:'';};
+  const reg={ID:get('r-id')||undefined, Tipo:tipo, Grupo:get('r-grupo'),
+    Descricao:get('r-desc').trim(), Perfil:perfilAtivo, ValorPadrao:parseValor(get('r-valor')),
+    VigenciaInicio:get('r-vi').trim(), VigenciaFim:get('r-vf').trim(), Ativo:'SIM'};
   if(!reg.Descricao){ alert('Preencha a descrição.'); return; }
+  if(tipo==='ENTRADA'){
+    reg.Categoria=''; reg.DiaVenc=''; reg.EmFolha=''; reg.SalarioRef=''; reg.Conta=get('r-conta').trim();
+  } else {
+    reg.Categoria=get('r-cat'); reg.DiaVenc=get('r-dia');
+    const folha=document.getElementById('r-folha') && document.getElementById('r-folha').checked;
+    if(folha){
+      reg.SalarioRef=get('r-salref');
+      if(!reg.SalarioRef){ alert('Selecione o salário do qual esse item é descontado (ou cadastre um salário antes em Recorrentes · Entrada · SALÁRIO).'); return; }
+      reg.EmFolha='SIM'; reg.Conta='';
+    } else { reg.EmFolha=''; reg.SalarioRef=''; reg.Conta=get('r-conta').trim(); }
+  }
   await salvarReg('Recorrentes',reg,'r-save');
 }
 
@@ -1121,37 +1254,60 @@ function renderMovimentos(){
   });
   document.getElementById('movTbl').innerHTML=h+'</tbody></table>';
 }
+let _movCtx=null;
 function abrirMovimento(id,presetComp){
   if(!id && consolidado()){ alert('Selecione um perfil (João ou Lívia) para lançar.'); return; }
   const m=id?DB.movimentos.find(x=>x.ID===id):null;
+  _movCtx={m, presetComp};
   document.getElementById('modalT').textContent=m?'Editar movimento':'Novo avulso — '+perfilAtivo;
+  const tipo=(m && String(m.Tipo).toUpperCase()==='ENTRADA')?'ENTRADA':'SAÍDA';
   document.getElementById('modalC').innerHTML =
     '<input type="hidden" id="mv-id" value="'+(m?esc(m.ID):'')+'">'
-   +'<div class="grid">'
+   +'<input type="hidden" id="mv-tipo" value="'+tipo+'">'
+   +'<div class="segbtns">'
+     +'<button type="button" id="mv-bt-saida" class="segbtn" onclick="setMovTipo(\'SAÍDA\')">↑ Saída (despesa)</button>'
+     +'<button type="button" id="mv-bt-entrada" class="segbtn" onclick="setMovTipo(\'ENTRADA\')">↓ Entrada (renda)</button>'
+   +'</div>'
+   +'<div id="mv-campos"></div>'
+   +'<div class="acoes"><button class="btn-ghost" onclick="fecharModal()">Cancelar</button><button class="btn green" id="mv-save" onclick="salvarMovimento()">Salvar</button></div>';
+  renderMovimentoCampos(tipo);
+  abrirModal();
+}
+function setMovTipo(t){ document.getElementById('mv-tipo').value=t; renderMovimentoCampos(t); }
+function renderMovimentoCampos(tipo){
+  const m=_movCtx&&_movCtx.m, presetComp=_movCtx&&_movCtx.presetComp;
+  document.getElementById('mv-bt-saida').classList.toggle('on',tipo==='SAÍDA');
+  document.getElementById('mv-bt-entrada').classList.toggle('on',tipo==='ENTRADA');
+  let h='<div class="grid">'
      +fld('Competência (AAAA-MM)','<input id="mv-comp" value="'+(m?esc(m.Competencia):(presetComp||compAtual()))+'">')
      +fld('Data','<input type="date" id="mv-data" value="'+(m?paraDate(m.Data):'')+'">')
    +'</div>'
-   +'<div class="grid full">'
-     +fld('Tipo','<select id="mv-tipo">'+['SAÍDA','ENTRADA'].map(t=>opt(t,m&&m.Tipo)).join('')+'</select>')
-   +'</div>'
-   +'<div class="grid full">'+fld('Descrição','<input id="mv-desc" value="'+(m?esc(m.Descricao):'')+'">')+'</div>'
-   +'<div class="grid">'
-     +fld('Grupo','<select id="mv-grupo">'+[...GRUPOS_ENTRADA,...GRUPOS_SAIDA].map(g=>opt(g,m&&m.Grupo)).join('')+'</select>')
-     +fld('Categoria','<select id="mv-cat">'+CATEGORIAS.map(g=>opt(g,m&&m.Categoria)).join('')+'</select>')
-   +'</div>'
-   +'<div class="grid">'
-     +fld('Valor (R$)','<input id="mv-valor" inputmode="decimal" value="'+(m?String(parseValor(m.Valor)).replace('.',','):'')+'">')
+   +'<div class="grid full">'+fld('Descrição','<input id="mv-desc" value="'+(m?esc(m.Descricao):'')+'">')+'</div>';
+  if(tipo==='ENTRADA'){
+    h+='<div class="grid">'
+      +fld('Grupo de renda','<select id="mv-grupo">'+GRUPOS_RENDA.map(g=>opt(g,m&&m.Grupo)).join('')+'</select>')
+      +fld('Valor (R$)','<input id="mv-valor" inputmode="decimal" value="'+(m?String(parseValor(m.Valor)).replace('.',','):'')+'">')
+     +'</div>';
+  } else {
+    h+='<div class="grid">'
+      +fld('Grupo','<select id="mv-grupo">'+GRUPOS_SAIDA.map(g=>opt(g,m&&m.Grupo)).join('')+'</select>')
+      +fld('Categoria','<select id="mv-cat">'+CATEGORIAS.map(g=>opt(g,m&&m.Categoria)).join('')+'</select>')
+     +'</div>'
+     +'<div class="grid full">'+fld('Valor (R$)','<input id="mv-valor" inputmode="decimal" value="'+(m?String(parseValor(m.Valor)).replace('.',','):'')+'">')+'</div>';
+  }
+  h+='<div class="grid">'
      +fld('Status','<select id="mv-status">'+['PAGO','PREVISTO'].map(t=>opt(t,m&&m.Status)).join('')+'</select>')
-   +'</div>'
-   +'<div class="grid full">'+fld('Conta (de onde sai / pra onde entra)','<select id="mv-conta">'+optsContas(m?m.Conta:contaPadrao())+'</select>')+'</div>'
-   +'<div class="acoes"><button class="btn-ghost" onclick="fecharModal()">Cancelar</button><button class="btn green" id="mv-save" onclick="salvarMovimento()">Salvar</button></div>';
-  abrirModal();
+     +fld(tipo==='ENTRADA'?'Conta (pra onde entra)':'Conta (de onde sai)','<select id="mv-conta">'+optsContas(m?m.Conta:contaPadrao())+'</select>')
+   +'</div>';
+  document.getElementById('mv-campos').innerHTML=h;
 }
 async function salvarMovimento(){
-  const reg={ID:document.getElementById('mv-id').value||undefined,Competencia:document.getElementById('mv-comp').value.trim(),Data:deDate(document.getElementById('mv-data').value),
-    Tipo:document.getElementById('mv-tipo').value,Grupo:document.getElementById('mv-grupo').value,Categoria:document.getElementById('mv-cat').value,
-    Perfil:perfilAtivo,CompGasto:document.getElementById('mv-comp').value.trim(),Origem:'MANUAL',Conta:document.getElementById('mv-conta').value.trim(),Descricao:document.getElementById('mv-desc').value.trim(),
-    Valor:parseValor(document.getElementById('mv-valor').value),Status:document.getElementById('mv-status').value};
+  const get=id=>{const e=document.getElementById(id); return e?e.value:'';};
+  const tipo=get('mv-tipo');
+  const reg={ID:get('mv-id')||undefined,Competencia:get('mv-comp').trim(),Data:deDate(get('mv-data')),
+    Tipo:tipo,Grupo:get('mv-grupo'),Categoria:tipo==='ENTRADA'?'':get('mv-cat'),
+    Perfil:perfilAtivo,CompGasto:get('mv-comp').trim(),Origem:'MANUAL',Conta:get('mv-conta').trim(),Descricao:get('mv-desc').trim(),
+    Valor:parseValor(get('mv-valor')),Status:get('mv-status')};
   if(!/^\d{4}-\d{2}$/.test(reg.Competencia)){ alert('Competência deve ser AAAA-MM.'); return; }
   if(!reg.Descricao){ alert('Preencha a descrição.'); return; }
   if(!reg.ID) reg.Codigo=proximoCodigo('MOV');
@@ -1184,20 +1340,33 @@ function renderEmprestimos(){
   });
   elT.innerHTML=h+'</tbody></table>';
 }
+let _empCtx=null;
 function abrirEmprestimo(id){
   if(!id && consolidado()){ alert('Selecione um perfil (João ou Lívia) para lançar.'); return; }
   const e=id?DB.emprestimos.find(x=>x.ID===id):null;
+  _empCtx=e||null;
   document.getElementById('modalT').textContent=e?'Editar empréstimo':'Novo empréstimo — '+perfilAtivo;
   document.getElementById('modalC').innerHTML =
     '<input type="hidden" id="e-id" value="'+(e?esc(e.ID):'')+'">'
-   +'<div class="grid">'+fld('Tipo','<select id="e-tipo">'+TIPOS_EMPRESTIMO.map(t=>opt(t,e&&e.Tipo)).join('')+'</select>')+fld('Instituição','<input id="e-inst" value="'+(e?esc(e.Instituicao):'')+'">')+'</div>'
+   +'<div class="grid">'+fld('Tipo','<select id="e-tipo" onchange="toggleEmpFolha()">'+TIPOS_EMPRESTIMO.map(t=>opt(t,e&&e.Tipo)).join('')+'</select>')+fld('Instituição','<input id="e-inst" value="'+(e?esc(e.Instituicao):'')+'">')+'</div>'
+   +'<div id="e-salref-box"></div>'
    +'<div class="grid full">'+fld('Contrato','<input id="e-contrato" value="'+(e?esc(e.Contrato):'')+'">')+'</div>'
    +'<div class="grid">'+fld('Data contratação','<input type="date" id="e-data" value="'+(e?paraDate(e.DataContratacao):'')+'">')+fld('Valor contratado (R$)','<input id="e-valctr" inputmode="decimal" value="'+(e?String(parseValor(e.ValorContratado)).replace('.',','):'')+'">')+'</div>'
    +'<div class="grid">'+fld('Tx juros nominal (%)','<input id="e-txn" value="'+(e?esc(e.TxNominal):'')+'">')+fld('Tx juros efetiva (%)','<input id="e-txe" value="'+(e?esc(e.TxEfetiva):'')+'">')+'</div>'
    +'<div class="grid">'+fld('Valor da parcela (R$)','<input id="e-valpar" inputmode="decimal" value="'+(e?String(parseValor(e.ValorParcela)).replace('.',','):'')+'">')+fld('Qtd parcelas','<input id="e-qtd" type="number" min="1" value="'+(e?parseInt(e.QtdParcelas)||'':'')+'">')+'</div>'
    +'<div class="grid">'+fld('Parcelas já pagas','<input id="e-pagas" type="number" min="0" value="'+(e?parseInt(e.ParcelasPagas)||0:0)+'">')+fld('Competência 1ª parcela (AAAA-MM)','<input id="e-comp" value="'+(e?esc(e.CompetenciaInicial):compAtual())+'">')+'</div>'
    +'<div class="acoes"><button class="btn-ghost" onclick="fecharModal()">Cancelar</button><button class="btn green" id="e-save" onclick="salvarEmprestimo()">Salvar</button></div>';
+  toggleEmpFolha();
   abrirModal();
+}
+function toggleEmpFolha(){
+  const t=document.getElementById('e-tipo').value;
+  const box=document.getElementById('e-salref-box'); if(!box) return;
+  if(String(t||'').toUpperCase().indexOf('CONSIGN')>=0){
+    box.innerHTML='<div class="grid full" style="background:#F0F7F3;border:1px solid #CFE6DA;border-radius:10px;padding:10px 12px;margin:2px 0">'
+      +'<div style="font-size:11px;font-weight:700;color:#16A34A;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Consignado · desconto em folha</div>'
+      +campoSalarioRef('e-salref', _empCtx&&_empCtx.SalarioRef)+'</div>';
+  } else { box.innerHTML='<input type="hidden" id="e-salref" value="">'; }
 }
 async function salvarEmprestimo(){
   const reg={ID:document.getElementById('e-id').value||undefined,Instituicao:document.getElementById('e-inst').value.trim(),Contrato:document.getElementById('e-contrato').value.trim(),
@@ -1205,6 +1374,12 @@ async function salvarEmprestimo(){
     TxNominal:document.getElementById('e-txn').value.trim(),TxEfetiva:document.getElementById('e-txe').value.trim(),ValorParcela:parseValor(document.getElementById('e-valpar').value),
     QtdParcelas:parseInt(document.getElementById('e-qtd').value)||0,ParcelasPagas:parseInt(document.getElementById('e-pagas').value)||0,CompetenciaInicial:document.getElementById('e-comp').value.trim(),Tipo:document.getElementById('e-tipo').value,Perfil:perfilAtivo};
   if(!reg.Instituicao){ alert('Preencha a instituição.'); return; }
+  const consig=String(reg.Tipo||'').toUpperCase().indexOf('CONSIGN')>=0;
+  const salEl=document.getElementById('e-salref'); const salref=salEl?salEl.value:'';
+  if(consig){
+    if(!salref){ alert('Consignado precisa estar vinculado a um salário. Cadastre um salário em Recorrentes (Entrada · grupo SALÁRIO) e selecione-o.'); return; }
+    reg.SalarioRef=salref;
+  } else reg.SalarioRef='';
   await salvarReg('Emprestimos',reg,'e-save');
 }
 
