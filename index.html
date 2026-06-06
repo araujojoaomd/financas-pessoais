@@ -189,14 +189,17 @@ tbody tr:hover{background:#F3F8F5}
   <button class="side-item on" data-view="mes" onclick="setView('mes')"><span class="si-ic">📅</span><span class="si-lbl">Controle do Mês</span></button>
   <button class="side-item" data-view="fluxo" onclick="setView('fluxo')"><span class="si-ic">📊</span><span class="si-lbl">Fluxo de Caixa</span></button>
   <div class="side-h">Receitas</div>
+  <button class="side-item" data-view="lancreceita" onclick="setView('lancreceita')"><span class="si-ic">💵</span><span class="si-lbl">Lançar Receita</span></button>
   <button class="side-item" data-view="recreceitas" onclick="setView('recreceitas')"><span class="si-ic">🔁</span><span class="si-lbl">Receitas Recorrentes</span></button>
   <div class="side-h">Pagamentos/Compras</div>
+  <button class="side-item" data-view="lancpagamento" onclick="setView('lancpagamento')"><span class="si-ic">💸</span><span class="si-lbl">Lançar Pagamento</span></button>
   <button class="side-item" data-view="cartoes" onclick="setView('cartoes')"><span class="si-ic">🛒</span><span class="si-lbl">Compras no Cartão</span></button>
   <button class="side-item" data-view="recpagamentos" onclick="setView('recpagamentos')"><span class="si-ic">🔁</span><span class="si-lbl">Pagamentos Recorrentes</span></button>
   <div class="side-h">Situação</div>
   <button class="side-item" data-view="emprestimos" onclick="setView('emprestimos')"><span class="si-ic">🏦</span><span class="si-lbl">Empréstimos</span></button>
   <button class="side-item" data-view="faturas" onclick="setView('faturas')"><span class="si-ic">🧾</span><span class="si-lbl">Fatura dos Cartões</span></button>
-  <button class="side-item" data-view="movimentos" onclick="setView('movimentos')"><span class="si-ic">📋</span><span class="si-lbl">Histórico (extrato)</span></button>
+  <button class="side-item" data-view="extrato" onclick="setView('extrato')"><span class="si-ic">📄</span><span class="si-lbl">Extrato Bancário</span></button>
+  <button class="side-item" data-view="movimentos" onclick="setView('movimentos')"><span class="si-ic">📋</span><span class="si-lbl">Histórico</span></button>
   <div class="side-h">Cadastros</div>
   <button class="side-item" data-view="contas" onclick="setView('contas')"><span class="si-ic">🏛️</span><span class="si-lbl">Contas Bancárias</span></button>
   <button class="side-item" data-view="cartoescad" onclick="setView('cartoescad')"><span class="si-ic">💳</span><span class="si-lbl">Cartões de Crédito</span></button>
@@ -212,7 +215,8 @@ tbody tr:hover{background:#F3F8F5}
       <select class="flt" id="mesComp" style="min-width:150px;text-align:center;font-weight:600" onchange="renderMes()"></select>
       <button class="btn-ghost" onclick="mudarMes(1)">›</button>
       <div class="sep"></div>
-      <button class="btn green" onclick="abrirMovimento(null,document.getElementById('mesComp').value)">+ Lançar avulso</button>
+      <button class="btn green" onclick="abrirMovimento(null,document.getElementById('mesComp').value,'ENTRADA')">+ Receita</button>
+      <button class="btn green" onclick="abrirMovimento(null,document.getElementById('mesComp').value,'SAÍDA')">+ Pagamento</button>
     </div>
     <div class="resumo" id="mesResumo"></div>
     <div class="tbl-wrap"><div id="mesTbl"></div></div>
@@ -275,6 +279,28 @@ tbody tr:hover{background:#F3F8F5}
     <p style="font-size:11.5px;color:#5B6B63;margin-top:10px">A fatura é o que sai do caixa. Se o valor do banco não bater (compra que não entrou, juros, rotativo), some um <b>Ajuste</b>. Pagar a fatura dá baixa em tudo e devolve o limite do cartão.</p>
   </div>
 
+  <!-- LANÇAR RECEITA (avulsa) -->
+  <div class="view" id="v-lancreceita">
+    <div class="toolbar">
+      <h2>Lançar receita</h2>
+      <div class="sep"></div>
+      <button class="btn green" onclick="abrirMovimento(null,null,'ENTRADA')">+ Nova receita</button>
+    </div>
+    <div class="tbl-wrap"><div id="lancRecTbl"></div></div>
+    <p style="font-size:11.5px;color:#5B6B63;margin-top:10px">Receita que entrou (ou vai entrar) fora dos recorrentes — reembolso, venda, extra. Para salário e rendas fixas use <b>Receitas Recorrentes</b>.</p>
+  </div>
+
+  <!-- LANÇAR PAGAMENTO (avulso) -->
+  <div class="view" id="v-lancpagamento">
+    <div class="toolbar">
+      <h2>Lançar pagamento</h2>
+      <div class="sep"></div>
+      <button class="btn green" onclick="abrirMovimento(null,null,'SAÍDA')">+ Novo pagamento</button>
+    </div>
+    <div class="tbl-wrap"><div id="lancPagTbl"></div></div>
+    <p style="font-size:11.5px;color:#5B6B63;margin-top:10px">Despesa avulsa paga direto de uma conta. Para contas fixas mensais use <b>Pagamentos Recorrentes</b>; para cartão use <b>Compras no Cartão</b>.</p>
+  </div>
+
   <!-- RECEITAS RECORRENTES -->
   <div class="view" id="v-recreceitas">
     <div class="toolbar">
@@ -295,6 +321,19 @@ tbody tr:hover{background:#F3F8F5}
     </div>
     <div class="tbl-wrap"><div id="recPagTbl"></div></div>
     <p style="font-size:11.5px;color:#5B6B63;margin-top:10px">Despesas fixas mensais (internet, escola, plano de saúde). Marque <b>descontado em folha</b> se sai direto do salário.</p>
+  </div>
+
+  <!-- EXTRATO BANCÁRIO -->
+  <div class="view" id="v-extrato">
+    <div class="toolbar">
+      <h2>Extrato bancário</h2>
+      <select class="flt" id="extConta" style="min-width:220px" onchange="renderExtrato()"></select>
+      <div class="sep"></div>
+      <button class="btn-ghost" onclick="carregar()">↻ Atualizar</button>
+    </div>
+    <div id="extResumo" class="resumo" style="grid-template-columns:repeat(4,1fr)"></div>
+    <div class="tbl-wrap"><div id="extTbl"></div></div>
+    <p style="font-size:11.5px;color:#5B6B63;margin-top:10px">Mostra só o que já foi <b>realizado (PAGO)</b> nessa conta, em ordem de data, com o saldo correndo até o saldo atual. Previstos não entram aqui — confirme no <b>Controle do Mês</b>.</p>
   </div>
 
   <!-- MOVIMENTOS -->
@@ -700,7 +739,7 @@ function lancGasto(){
 }
 
 // ===== RENDER PRINCIPAL =====
-function renderTudo(){ renderPerfilSel(); renderMes(); renderFluxo(); renderCompras(); renderFaturas(); renderRecorrentes(); renderMovimentos(); renderEmprestimos(); renderContasBancarias(); renderCartoesCad(); renderConfig(); }
+function renderTudo(){ renderPerfilSel(); renderMes(); renderFluxo(); renderLancReceita(); renderLancPagamento(); renderCompras(); renderFaturas(); renderRecorrentes(); renderExtrato(); renderMovimentos(); renderEmprestimos(); renderContasBancarias(); renderCartoesCad(); renderConfig(); }
 function toggleSidebar(){ const sb=document.getElementById('sidebar'); if(!sb) return; sb.classList.toggle('collapsed'); try{ localStorage.setItem('fp_sidebar', sb.classList.contains('collapsed')?'1':'0'); }catch(e){} }
 function aplicarSidebar(){ try{ if(localStorage.getItem('fp_sidebar')==='1'){ const sb=document.getElementById('sidebar'); if(sb) sb.classList.add('collapsed'); } }catch(e){} }
 
@@ -1297,29 +1336,26 @@ function renderMovimentos(){
   document.getElementById('movTbl').innerHTML=h+'</tbody></table>';
 }
 let _movCtx=null;
-function abrirMovimento(id,presetComp){
+function abrirMovimento(id,presetComp,tipoForcado){
   if(!id && consolidado()){ alert('Selecione um perfil (João ou Lívia) para lançar.'); return; }
   const m=id?DB.movimentos.find(x=>x.ID===id):null;
   _movCtx={m, presetComp};
-  document.getElementById('modalT').textContent=m?'Editar movimento':'Novo avulso — '+perfilAtivo;
-  const tipo=(m && String(m.Tipo).toUpperCase()==='ENTRADA')?'ENTRADA':'SAÍDA';
+  const tipo = m ? ((String(m.Tipo).toUpperCase()==='ENTRADA')?'ENTRADA':'SAÍDA')
+                 : ((tipoForcado==='ENTRADA')?'ENTRADA':'SAÍDA');
+  const ent = tipo==='ENTRADA';
+  document.getElementById('modalT').textContent = m
+    ? (ent?'Editar receita':'Editar pagamento')
+    : (ent?'Nova receita — '+perfilAtivo:'Novo pagamento — '+perfilAtivo);
   document.getElementById('modalC').innerHTML =
     '<input type="hidden" id="mv-id" value="'+(m?esc(m.ID):'')+'">'
    +'<input type="hidden" id="mv-tipo" value="'+tipo+'">'
-   +'<div class="segbtns">'
-     +'<button type="button" id="mv-bt-saida" class="segbtn" onclick="setMovTipo(\'SAÍDA\')">↑ Saída (despesa)</button>'
-     +'<button type="button" id="mv-bt-entrada" class="segbtn" onclick="setMovTipo(\'ENTRADA\')">↓ Entrada (renda)</button>'
-   +'</div>'
    +'<div id="mv-campos"></div>'
    +'<div class="acoes"><button class="btn-ghost" onclick="fecharModal()">Cancelar</button><button class="btn green" id="mv-save" onclick="salvarMovimento()">Salvar</button></div>';
   renderMovimentoCampos(tipo);
   abrirModal();
 }
-function setMovTipo(t){ document.getElementById('mv-tipo').value=t; renderMovimentoCampos(t); }
 function renderMovimentoCampos(tipo){
   const m=_movCtx&&_movCtx.m, presetComp=_movCtx&&_movCtx.presetComp;
-  document.getElementById('mv-bt-saida').classList.toggle('on',tipo==='SAÍDA');
-  document.getElementById('mv-bt-entrada').classList.toggle('on',tipo==='ENTRADA');
   let h='<div class="grid">'
      +fld('Competência (AAAA-MM)','<input id="mv-comp" value="'+(m?esc(m.Competencia):(presetComp||compAtual()))+'">')
      +fld('Data','<input type="date" id="mv-data" value="'+(m?paraDate(m.Data):'')+'">')
@@ -1354,6 +1390,94 @@ async function salvarMovimento(){
   if(!reg.Descricao){ alert('Preencha a descrição.'); return; }
   if(!reg.ID) reg.Codigo=proximoCodigo('MOV');
   await salvarReg('Movimentos',reg,'mv-save');
+}
+
+// ===== LANÇAR RECEITA / PAGAMENTO (avulsos manuais) =====
+function renderLancAvulso(tipo,elId){
+  const el=document.getElementById(elId); if(!el) return;
+  const arr=(DB.movimentos||[]).filter(m=>
+    (m.Tipo||'')===tipo && String(m.Origem||'').toUpperCase()==='MANUAL' && passaPerfil(m.Perfil));
+  arr.sort((a,b)=>chaveData(b)-chaveData(a));
+  if(!arr.length){ el.innerHTML='<p class="vazio">Nenhum lançamento avulso ainda.</p>'; return; }
+  const ent=tipo==='ENTRADA';
+  let h='<table class="grid"><thead><tr><th>Data</th><th>Competência</th>'
+    +'<th>'+(ent?'Grupo':'Categoria')+'</th><th>Descrição</th>'
+    +(consolidado()?'<th>Pessoa</th>':'')+'<th>Conta</th><th class="num">Valor</th>'
+    +'<th>Status</th><th></th></tr></thead><tbody>';
+  arr.forEach(m=>{
+    h+='<tr><td>'+(m.Data||'')+'</td><td>'+(m.Competencia||'')+'</td>'
+      +'<td>'+(ent?(m.Grupo||''):(m.Categoria||m.Grupo||''))+'</td>'
+      +'<td>'+(m.Descricao||'')+'</td>'
+      +(consolidado()?'<td>'+(m.Perfil||'')+'</td>':'')
+      +'<td>'+(m.Conta||'')+'</td>'
+      +'<td class="num '+(ent?'v-in':'v-out')+'">'+brl(parseValor(m.Valor))+'</td>'
+      +'<td>'+(m.Status||'')+'</td>'
+      +'<td class="acoes"><button class="btn-mini" onclick="abrirMovimento(\''+m.ID+'\')">✏️</button>'
+      +'<button class="btn-mini" onclick="excluirReg(\'Movimentos\',\''+m.ID+'\')">🗑️</button></td></tr>';
+  });
+  h+='</tbody></table>';
+  el.innerHTML=h;
+}
+function renderLancReceita(){ renderLancAvulso('ENTRADA','lancRecTbl'); }
+function renderLancPagamento(){ renderLancAvulso('SAÍDA','lancPagTbl'); }
+
+// ===== EXTRATO BANCÁRIO =====
+// Toda a movimentação REALIZADA (PAGO) de uma conta, com saldo correndo.
+function chaveData(m){
+  const d=String(m.Data||'').trim();
+  let mm=d.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if(mm) return new Date(+mm[3],+mm[2]-1,+mm[1]).getTime();
+  const c=String(m.Competencia||'').trim();
+  let cm=c.match(/^(\d{4})-(\d{2})$/);
+  if(cm) return new Date(+cm[1],+cm[2]-1,1).getTime();
+  return 0;
+}
+function movimentosDaConta(nome){
+  const arr=(DB.movimentos||[]).filter(m=>
+    (m.Conta||'')===nome && String(m.Status||'').toUpperCase()==='PAGO');
+  arr.sort((a,b)=>chaveData(a)-chaveData(b));
+  return arr;
+}
+function popularExtratoContas(){
+  const sel=document.getElementById('extConta'); if(!sel) return;
+  const atual=sel.value;
+  const contas=(DB.contas||[]).filter(c=>passaPerfil(c.Perfil)).map(c=>c.Nome);
+  sel.innerHTML=contas.map(n=>'<option value="'+n+'">'+n+'</option>').join('');
+  if(atual && contas.includes(atual)) sel.value=atual;
+}
+function renderExtrato(){
+  popularExtratoContas();
+  const sel=document.getElementById('extConta');
+  const resumo=document.getElementById('extResumo');
+  const tbl=document.getElementById('extTbl');
+  if(!sel||!resumo||!tbl) return;
+  const nome=sel.value;
+  if(!nome){ resumo.innerHTML=''; tbl.innerHTML='<p class="vazio">Nenhuma conta cadastrada para este perfil.</p>'; return; }
+  const conta=(DB.contas||[]).find(c=>c.Nome===nome);
+  const ini=conta?parseValor(conta.SaldoInicial):0;
+  const movs=movimentosDaConta(nome);
+  let saldo=ini, entradas=0, saidas=0;
+  let linhas='<tr class="ext-abertura"><td colspan="'+(consolidado()?5:4)+'">Saldo inicial</td>'
+    +'<td class="num">'+brl(ini)+'</td></tr>';
+  movs.forEach(m=>{
+    const ent=(m.Tipo||'')==='ENTRADA';
+    const v=parseValor(m.Valor);
+    if(ent){ saldo+=v; entradas+=v; } else { saldo-=v; saidas+=v; }
+    linhas+='<tr><td>'+(m.Data||'')+'</td><td>'+(m.Descricao||'')+'</td>'
+      +(consolidado()?'<td>'+(m.Perfil||'')+'</td>':'')
+      +'<td>'+marcadorOrigem(m)+'</td>'
+      +'<td class="num v-in">'+(ent?brl(v):'')+'</td>'
+      +'<td class="num v-out">'+(ent?'':brl(v))+'</td>'
+      +'<td class="num '+(saldo<0?'v-neg':'')+'">'+brl(saldo)+'</td></tr>';
+  });
+  resumo.innerHTML=card('Saldo inicial',brl(ini),'')
+    +card('Entradas',brl(entradas),'v-in')
+    +card('Saídas',brl(saidas),'v-out')
+    +card('Saldo atual',brl(saldo),saldo<0?'v-neg':'v-liq');
+  tbl.innerHTML='<table class="grid"><thead><tr><th>Data</th><th>Descrição</th>'
+    +(consolidado()?'<th>Pessoa</th>':'')
+    +'<th>Origem</th><th class="num">Entrada</th><th class="num">Saída</th>'
+    +'<th class="num">Saldo</th></tr></thead><tbody>'+linhas+'</tbody></table>';
 }
 
 // ===== EMPRESTIMOS =====
