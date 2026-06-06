@@ -1318,6 +1318,21 @@ async function salvarMovimento(){
 // Parcelas pagas = as já pagas no cadastro (antes do app) + as baixadas no Mês.
 function parcelasPagasEmp(e){
   const inicial=Math.max(0,parseInt(e.ParcelasPagas)||0);
+  const qtd=Math.max(1,parseInt(e.QtdParcelas)||1);
+  // Consignado: amortiza junto com o salário vinculado (a parcela do mês "cai"
+  // quando o salário daquela competência foi recebido/confirmado no Mês).
+  if(ehConsignado(e) && e.SalarioRef){
+    const ini=e.CompetenciaInicial; if(!ini) return inicial;
+    const recebidos=new Set(
+      DB.movimentos
+        .filter(m=>String(m.Ref||'').startsWith('REC:'+e.SalarioRef+':') && String(m.Status||'').toUpperCase()!=='PREVISTO')
+        .map(m=>String(m.Ref).split(':')[2])
+    );
+    let pagas=inicial;
+    for(let k=inicial;k<qtd;k++){ if(recebidos.has(compAdd(ini,k))) pagas++; }
+    return Math.min(qtd,pagas);
+  }
+  // Manual: amortiza no botão Pagar do Mês (baixa explícita).
   const baixadas=DB.movimentos.filter(m=>String(m.Ref||'').startsWith('EMP:'+e.ID+':')).length;
   return inicial+baixadas;
 }
