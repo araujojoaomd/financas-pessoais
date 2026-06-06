@@ -28,6 +28,7 @@ var ABAS = {
   Recorrentes:    ['ID','Perfil','Tipo','Grupo','Descricao','Categoria','Conta','ValorPadrao','DiaVenc','VigenciaInicio','VigenciaFim','Ativo','EmFolha','SalarioRef'],
   Movimentos:     ['ID','Codigo','Perfil','Competencia','CompGasto','Data','Tipo','Grupo','Categoria','Conta','Descricao','Valor','Status','Origem','Ref'],
   Emprestimos:    ['ID','Perfil','Instituicao','Contrato','DataContratacao','ValorContratado','TxNominal','TxEfetiva','ValorParcela','QtdParcelas','ParcelasPagas','CompetenciaInicial','Tipo','SalarioRef'],
+  Categorias:     ['ID','Tipo','Nivel','Nome','Ativo'],
   Config:         ['ID','Valor']
 };
 
@@ -42,6 +43,8 @@ function setup() {
     sh.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#1F3864').setFontColor('#FFFFFF');
     sh.setFrozenRows(1);
   });
+  // Semeia Grupos/Categorias na primeira vez (só se a aba estiver vazia).
+  semearCategorias_(ss);
   // Remove a aba padrão "Página1"/"Sheet1" se estiver vazia
   ['Página1','Sheet1','Folha1'].forEach(function(n) {
     var s = ss.getSheetByName(n);
@@ -50,6 +53,33 @@ function setup() {
     }
   });
   return 'Setup concluído: ' + Object.keys(ABAS).join(', ');
+}
+
+// Preenche a aba Categorias com os grupos/categorias padrão, só se ainda não houver dados.
+function semearCategorias_(ss) {
+  var sh = ss.getSheetByName('Categorias');
+  if (!sh || sh.getLastRow() > 1) return; // já tem dados
+  var seed = [
+    ['ENTRADA','GRUPO','SALÁRIO'],
+    ['ENTRADA','GRUPO','OUTRAS RENDAS'],
+    ['SAÍDA','GRUPO','CARRO'],
+    ['SAÍDA','GRUPO','APT PARNAMIRIM'],
+    ['SAÍDA','GRUPO','FLAT CARNEIROS'],
+    ['SAÍDA','GRUPO','APT JAQUEIRA'],
+    ['SAÍDA','GRUPO','CASA ALDEIA'],
+    ['SAÍDA','GRUPO','GASTOS PESSOAIS'],
+    ['SAÍDA','CATEGORIA','ALIMENTAÇÃO'],
+    ['SAÍDA','CATEGORIA','MORADIA'],
+    ['SAÍDA','CATEGORIA','TRANSPORTE'],
+    ['SAÍDA','CATEGORIA','SAÚDE'],
+    ['SAÍDA','CATEGORIA','GASTO PESSOAL'],
+    ['SAÍDA','CATEGORIA','OBRAS CASA DE ALDEIA'],
+    ['SAÍDA','CATEGORIA','SAQUE']
+  ];
+  var linhas = seed.map(function(r, i) {
+    return ['CG-' + (i + 1), r[0], r[1], r[2], 'SIM'];
+  });
+  sh.getRange(2, 1, linhas.length, 5).setValues(linhas);
 }
 
 // ===== ENTRADA HTTP =====
@@ -99,7 +129,7 @@ function verificar(idToken) {
 // ===== LEITURA =====
 function lerTudo() {
   var out = { ok: true };
-  var mapa = { Contas: 'contas', Cartoes: 'cartoes', Compras_Cartao: 'compras', Recorrentes: 'recorrentes', Movimentos: 'movimentos', Emprestimos: 'emprestimos', Config: 'config' };
+  var mapa = { Contas: 'contas', Cartoes: 'cartoes', Compras_Cartao: 'compras', Recorrentes: 'recorrentes', Movimentos: 'movimentos', Emprestimos: 'emprestimos', Categorias: 'categorias', Config: 'config' };
   Object.keys(ABAS).forEach(function(nome) {
     out[mapa[nome]] = lerAba(nome);
   });
@@ -175,7 +205,7 @@ function encontrarLinha(sh, id) {
 
 // Gera ID com prefixo por aba + timestamp curto + aleatório.
 function novoID(nome) {
-  var pre = { Contas: 'CC', Cartoes: 'CT', Compras_Cartao: 'CP', Recorrentes: 'RC', Movimentos: 'MV', Emprestimos: 'EM', Config: 'CF' }[nome] || 'XX';
+  var pre = { Contas: 'CC', Cartoes: 'CT', Compras_Cartao: 'CP', Recorrentes: 'RC', Movimentos: 'MV', Emprestimos: 'EM', Categorias: 'CG', Config: 'CF' }[nome] || 'XX';
   return pre + '-' + Date.now().toString(36).toUpperCase() + '-' + Math.floor(Math.random() * 1296).toString(36).toUpperCase();
 }
 

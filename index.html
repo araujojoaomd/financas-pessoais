@@ -203,6 +203,7 @@ tbody tr:hover{background:#F3F8F5}
   <div class="side-h">Cadastros</div>
   <button class="side-item" data-view="contas" onclick="setView('contas')"><span class="si-ic">🏛️</span><span class="si-lbl">Contas Bancárias</span></button>
   <button class="side-item" data-view="cartoescad" onclick="setView('cartoescad')"><span class="si-ic">💳</span><span class="si-lbl">Cartões de Crédito</span></button>
+  <button class="side-item" data-view="classificacoes" onclick="setView('classificacoes')"><span class="si-ic">🏷️</span><span class="si-lbl">Grupos e Categorias</span></button>
   <div class="side-h">Sistema</div>
   <button class="side-item" data-view="config" onclick="setView('config')"><span class="si-ic">⚙️</span><span class="si-lbl">Configurações</span></button>
 </aside>
@@ -382,6 +383,36 @@ tbody tr:hover{background:#F3F8F5}
     <div class="tbl-wrap"><div id="cartoesCadTbl"></div></div>
   </div>
 
+  <!-- GRUPOS E CATEGORIAS -->
+  <div class="view" id="v-classificacoes">
+    <div class="toolbar"><h2>Grupos e categorias</h2></div>
+    <div class="card-sec">
+      <div class="toolbar" style="margin:0 0 8px">
+        <h3 style="margin:0">Grupos de receita</h3>
+        <div class="sep"></div>
+        <button class="btn green" onclick="abrirCategoria(null,'ENTRADA','GRUPO')">+ Novo grupo de receita</button>
+      </div>
+      <div class="tbl-wrap"><div id="catGruRecTbl"></div></div>
+    </div>
+    <div class="card-sec" style="margin-top:18px">
+      <div class="toolbar" style="margin:0 0 8px">
+        <h3 style="margin:0">Grupos de despesa</h3>
+        <div class="sep"></div>
+        <button class="btn green" onclick="abrirCategoria(null,'SAÍDA','GRUPO')">+ Novo grupo de despesa</button>
+      </div>
+      <div class="tbl-wrap"><div id="catGruDesTbl"></div></div>
+    </div>
+    <div class="card-sec" style="margin-top:18px">
+      <div class="toolbar" style="margin:0 0 8px">
+        <h3 style="margin:0">Categorias de despesa</h3>
+        <div class="sep"></div>
+        <button class="btn green" onclick="abrirCategoria(null,'SAÍDA','CATEGORIA')">+ Nova categoria de despesa</button>
+      </div>
+      <div class="tbl-wrap"><div id="catCatDesTbl"></div></div>
+    </div>
+    <p style="font-size:11.5px;color:#5B6B63;margin-top:12px"><b>Grupo</b> é a visão macro (ex.: CARRO, CASA ALDEIA); <b>categoria</b> é o detalhe da despesa (ex.: ALIMENTAÇÃO, SAÚDE). Receitas só têm grupo. Grupos internos do sistema (cartão, empréstimo) são sempre mantidos.</p>
+  </div>
+
   <!-- CONFIG -->
   <div class="view" id="v-config">
     <div class="toolbar"><h2>Configurações</h2></div>
@@ -403,11 +434,28 @@ tbody tr:hover{background:#F3F8F5}
 const CLIENT_ID = '864961214405-bipsb4fk0sr0sgi8m9ei81u87rhjshc4.apps.googleusercontent.com';
 const API_URL = 'https://script.google.com/macros/s/AKfycbw6UxbDugNHePIk55EWr_XzMcxTb2hyFAHhDCydSryp4bCdPuPOtjBeU_Ax3GMgWqFT/exec';
 
-const GRUPOS_SAIDA = ['CARRO','APT PARNAMIRIM','FLAT CARNEIROS','APT JAQUEIRA','CASA ALDEIA','GASTOS PESSOAIS','SAQUE/PIX CARTÃO','PAGAMENTO CARTÃO','AJUSTE CARTÃO','EMPRÉSTIMOS','OUTROS'];
 const NAT_LABEL = {COMPRA:'Compra', PAGAMENTO:'Pagamento', PIX_PROPRIO:'PIX'};
 const GRUPOS_ENTRADA = ['RENDAS','ADIANT. CARTÃO'];
-const GRUPOS_RENDA = ['SALÁRIO','OUTRAS RENDAS'];
-const CATEGORIAS = ['GASTO PESSOAL','OBRAS CASA DE ALDEIA','SAQUE','MORADIA','TRANSPORTE','ALIMENTAÇÃO','SAÚDE','OUTROS'];
+// Grupos que o sistema usa internamente (cartão, empréstimo) — sempre presentes.
+const SYS_GRUPOS_SAIDA = ['SAQUE/PIX CARTÃO','PAGAMENTO CARTÃO','AJUSTE CARTÃO','EMPRÉSTIMOS','OUTROS'];
+// Defaults usados enquanto não há cadastro de Grupos/Categorias na planilha.
+const DEF_GRUPOS_SAIDA = ['CARRO','APT PARNAMIRIM','FLAT CARNEIROS','APT JAQUEIRA','CASA ALDEIA','GASTOS PESSOAIS'].concat(SYS_GRUPOS_SAIDA);
+const DEF_GRUPOS_RENDA = ['SALÁRIO','OUTRAS RENDAS'];
+const DEF_CATEGORIAS = ['GASTO PESSOAL','OBRAS CASA DE ALDEIA','SAQUE','MORADIA','TRANSPORTE','ALIMENTAÇÃO','SAÚDE','OUTROS'];
+// Listas vivas (recalculadas a partir de DB.categorias em recomputarClassificacoes()).
+let GRUPOS_SAIDA = DEF_GRUPOS_SAIDA.slice();
+let GRUPOS_RENDA = DEF_GRUPOS_RENDA.slice();
+let CATEGORIAS = DEF_CATEGORIAS.slice();
+function uniq(a){ return a.filter((v,i)=>a.indexOf(v)===i); }
+function ativoSim(v){ const s=String(v==null?'SIM':v).toUpperCase().trim(); return s!=='NÃO'&&s!=='NAO'&&s!=='FALSE'&&s!=='0'&&s!=='NÃO '; }
+function recomputarClassificacoes(){
+  const cats=(DB.categorias||[]).filter(c=>ativoSim(c.Ativo));
+  const sel=(tp,nv)=>cats.filter(c=>String(c.Tipo).toUpperCase()===tp&&String(c.Nivel).toUpperCase()===nv).map(c=>String(c.Nome).trim()).filter(Boolean);
+  const gSai=sel('SAÍDA','GRUPO'), gRen=sel('ENTRADA','GRUPO'), cat=sel('SAÍDA','CATEGORIA');
+  GRUPOS_SAIDA = gSai.length ? uniq(gSai.concat(SYS_GRUPOS_SAIDA)) : DEF_GRUPOS_SAIDA.slice();
+  GRUPOS_RENDA = gRen.length ? gRen : DEF_GRUPOS_RENDA.slice();
+  CATEGORIAS   = cat.length  ? cat                              : DEF_CATEGORIAS.slice();
+}
 const TIPOS_EMPRESTIMO = ['Consignado','Financiamento Imobiliário','Veículo','Empréstimo Pessoal','Outros'];
 function ehConsignado(e){ return String(e&&e.Tipo||'').toUpperCase().indexOf('CONSIGN')>=0; }
 const PERFIS = ['JOÃO','LÍVIA'];
@@ -427,7 +475,7 @@ const MESES_FULL = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho
 
 // ===== ESTADO =====
 let idToken=null, userEmail=null;
-let DB = {contas:[],cartoes:[],compras:[],recorrentes:[],movimentos:[],emprestimos:[],config:[]};
+let DB = {contas:[],cartoes:[],compras:[],recorrentes:[],movimentos:[],emprestimos:[],config:[],categorias:[]};
 let perfilAtivo = 'JOÃO';
 let viewAtual = 'mes';
 let regimeFluxo = 'CAIXA'; // CAIXA (desembolso) ou GASTO (competência)
@@ -511,8 +559,24 @@ function demo(){
     emprestimos:[
       {ID:'EM-1',Perfil:'JOÃO',Instituicao:'Bradesco',Contrato:'526274186',DataContratacao:'15/07/2024',ValorContratado:120000,TxNominal:'1,8',TxEfetiva:'2,1',ValorParcela:3200.00,QtdParcelas:60,ParcelasPagas:20,CompetenciaInicial:compAdd(c,-20),Tipo:'Consignado',SalarioRef:'RC-1'}
     ],
-    config:[]
+    config:[],
+    categorias:[
+      {ID:'CG-1',Tipo:'ENTRADA',Nivel:'GRUPO',Nome:'SALÁRIO',Ativo:'SIM'},
+      {ID:'CG-2',Tipo:'ENTRADA',Nivel:'GRUPO',Nome:'OUTRAS RENDAS',Ativo:'SIM'},
+      {ID:'CG-3',Tipo:'SAÍDA',Nivel:'GRUPO',Nome:'CARRO',Ativo:'SIM'},
+      {ID:'CG-4',Tipo:'SAÍDA',Nivel:'GRUPO',Nome:'APT PARNAMIRIM',Ativo:'SIM'},
+      {ID:'CG-5',Tipo:'SAÍDA',Nivel:'GRUPO',Nome:'CASA ALDEIA',Ativo:'SIM'},
+      {ID:'CG-6',Tipo:'SAÍDA',Nivel:'GRUPO',Nome:'GASTOS PESSOAIS',Ativo:'SIM'},
+      {ID:'CG-7',Tipo:'SAÍDA',Nivel:'CATEGORIA',Nome:'ALIMENTAÇÃO',Ativo:'SIM'},
+      {ID:'CG-8',Tipo:'SAÍDA',Nivel:'CATEGORIA',Nome:'MORADIA',Ativo:'SIM'},
+      {ID:'CG-9',Tipo:'SAÍDA',Nivel:'CATEGORIA',Nome:'TRANSPORTE',Ativo:'SIM'},
+      {ID:'CG-10',Tipo:'SAÍDA',Nivel:'CATEGORIA',Nome:'SAÚDE',Ativo:'SIM'},
+      {ID:'CG-11',Tipo:'SAÍDA',Nivel:'CATEGORIA',Nome:'GASTO PESSOAL',Ativo:'SIM'},
+      {ID:'CG-12',Tipo:'SAÍDA',Nivel:'CATEGORIA',Nome:'OBRAS CASA DE ALDEIA',Ativo:'SIM'},
+      {ID:'CG-13',Tipo:'SAÍDA',Nivel:'CATEGORIA',Nome:'SAQUE',Ativo:'SIM'}
+    ]
   };
+  recomputarClassificacoes();
   carregarFotos();
   document.getElementById('login').style.display='none';
   document.getElementById('app').style.display='';
@@ -534,12 +598,12 @@ async function chamar(payload){
 
 // Simula o backend no modo demonstração, operando em memória.
 function chamarDemo(payload){
-  const mapa={Contas:'contas',Cartoes:'cartoes',Compras_Cartao:'compras',Recorrentes:'recorrentes',Movimentos:'movimentos',Emprestimos:'emprestimos',Config:'config'};
-  if(payload.acao==='ler') return {ok:true,contas:DB.contas,cartoes:DB.cartoes,compras:DB.compras,recorrentes:DB.recorrentes,movimentos:DB.movimentos,emprestimos:DB.emprestimos,config:DB.config};
+  const mapa={Contas:'contas',Cartoes:'cartoes',Compras_Cartao:'compras',Recorrentes:'recorrentes',Movimentos:'movimentos',Emprestimos:'emprestimos',Config:'config',Categorias:'categorias'};
+  if(payload.acao==='ler') return {ok:true,contas:DB.contas,cartoes:DB.cartoes,compras:DB.compras,recorrentes:DB.recorrentes,movimentos:DB.movimentos,emprestimos:DB.emprestimos,config:DB.config,categorias:DB.categorias};
   const key=mapa[payload.aba]; if(!key) return {ok:false,erro:'aba_invalida'};
-  if(payload.acao==='salvar'){ const reg=Object.assign({},payload.registro); if(!reg.ID){ const pre={Contas:'CC',Cartoes:'CT',Compras_Cartao:'CP',Recorrentes:'RC',Movimentos:'MV',Emprestimos:'EM',Config:'CF'}[payload.aba]||'XX'; reg.ID=pre+'-'+Date.now().toString(36).toUpperCase(); } DB[key].push(reg); return {ok:true,id:reg.ID}; }
-  if(payload.acao==='editar'){ const i=DB[key].findIndex(x=>x.ID===payload.registro.ID); if(i>=0) DB[key][i]=Object.assign({},DB[key][i],payload.registro); return {ok:true}; }
-  if(payload.acao==='excluir'){ DB[key]=DB[key].filter(x=>x.ID!==payload.id); return {ok:true}; }
+  if(payload.acao==='salvar'){ const reg=Object.assign({},payload.registro); if(!reg.ID){ const pre={Contas:'CC',Cartoes:'CT',Compras_Cartao:'CP',Recorrentes:'RC',Movimentos:'MV',Emprestimos:'EM',Config:'CF',Categorias:'CG'}[payload.aba]||'XX'; reg.ID=pre+'-'+Date.now().toString(36).toUpperCase(); } DB[key].push(reg); if(key==='categorias') recomputarClassificacoes(); return {ok:true,id:reg.ID}; }
+  if(payload.acao==='editar'){ const i=DB[key].findIndex(x=>x.ID===payload.registro.ID); if(i>=0) DB[key][i]=Object.assign({},DB[key][i],payload.registro); if(key==='categorias') recomputarClassificacoes(); return {ok:true}; }
+  if(payload.acao==='excluir'){ DB[key]=DB[key].filter(x=>x.ID!==payload.id); if(key==='categorias') recomputarClassificacoes(); return {ok:true}; }
   return {ok:false,erro:'demo'};
 }
 
@@ -563,8 +627,9 @@ function normalizarComps(){
 }
 function aplicar(r){
   DB.contas = r.contas||[]; DB.cartoes = r.cartoes||[]; DB.compras = r.compras||[]; DB.recorrentes = r.recorrentes||[];
-  DB.movimentos = r.movimentos||[]; DB.emprestimos = r.emprestimos||[]; DB.config = r.config||[];
+  DB.movimentos = r.movimentos||[]; DB.emprestimos = r.emprestimos||[]; DB.config = r.config||[]; DB.categorias = r.categorias||[];
   normalizarComps();
+  recomputarClassificacoes();
   carregarFotos();
   popularSelects();
   renderTudo();
@@ -743,7 +808,7 @@ function lancGasto(){
 }
 
 // ===== RENDER PRINCIPAL =====
-function renderTudo(){ renderPerfilSel(); renderMes(); renderFluxo(); renderLancReceita(); renderLancPagamento(); renderCompras(); renderFaturas(); renderRecorrentes(); renderExtrato(); renderMovimentos(); renderEmprestimos(); renderContasBancarias(); renderCartoesCad(); renderConfig(); }
+function renderTudo(){ renderPerfilSel(); renderMes(); renderFluxo(); renderLancReceita(); renderLancPagamento(); renderCompras(); renderFaturas(); renderRecorrentes(); renderExtrato(); renderMovimentos(); renderEmprestimos(); renderContasBancarias(); renderCartoesCad(); renderClassificacoes(); renderConfig(); }
 function toggleSidebar(){ const sb=document.getElementById('sidebar'); if(!sb) return; sb.classList.toggle('collapsed'); try{ localStorage.setItem('fp_sidebar', sb.classList.contains('collapsed')?'1':'0'); }catch(e){} }
 function aplicarSidebar(){ try{ if(localStorage.getItem('fp_sidebar')==='1'){ const sb=document.getElementById('sidebar'); if(sb) sb.classList.add('collapsed'); } }catch(e){} }
 
@@ -803,7 +868,7 @@ function grupoOrigemSaida(o){
   if(o==='RECORRENTE') return 'Recorrentes';
   if(o==='EMPRÉSTIMO'||o==='EMPRESTIMO') return 'Empréstimos';
   if(o==='CARTÃO'||o==='CARTAO'||o==='AJUSTE'||o==='PAGAMENTO'||o==='PIX_CARTÃO'||o==='PIX_CARTAO') return 'Cartão';
-  return 'Avulsos';
+  return 'Pagamentos/Compras';
 }
 function labelMesAno(comp){ const p=String(comp).split('-'); const m=parseInt(p[1])||1; return MESES_FULL[m-1]+'/'+p[0]; }
 function popularSeletorMes(){
@@ -921,7 +986,7 @@ function renderMes(){
    + card('Saldo previsto',brl(inPrev-outPrev),(inPrev-outPrev)<0?'v-neg':'v-liq')
    + card('Falta nas faturas',brl(faltaFat),faltaFat>0.005?'v-out':'v-liq');
   if(!naoCartao.length && !faturas.length){ document.getElementById('mesTbl').innerHTML='<div class="vazio">Nada previsto para '+compLabel(comp)+'.</div>'; return; }
-  const ordem=['Recorrentes','Avulsos','Empréstimos'];
+  const ordem=['Recorrentes','Pagamentos/Compras','Empréstimos'];
   const gs={}; ordem.forEach(g=>gs[g]=[]);
   saidas.forEach(l=>{ gs[grupoOrigemSaida(l.origem)].push(l); });
   let h = caixaMesEntradas(entradas);
@@ -933,7 +998,7 @@ async function desfazerItem(i){
   const l = window._mesItens[i]; if(!l||!l.movId) return;
   // Se veio de uma fonte (tem ref), excluir o movimento devolve o item a PREVISTO.
   // Se é avulso (sem ref), excluir remove o lançamento de vez.
-  if(!l.ref && !confirm('Este é um lançamento avulso. Excluir de vez?')) return;
+  if(!l.ref && !confirm('Este é um lançamento manual. Excluir de vez?')) return;
   const r = await chamar({acao:'excluir',aba:'Movimentos',id:l.movId});
   if(r.ok){ toast(l.ref?'Baixa desfeita':'Excluído'); await carregar(); } else toast('Erro: '+(r.erro||'falha'),true);
 }
@@ -1035,7 +1100,7 @@ function renderFluxo(){
   Object.keys(rec).sort().forEach(g=>{ h+='<tr><td class="grupo">'+esc(g)+'</td>'+comps.map(cp=>celula(rec[g][cp])).join('')+'</tr>'; });
   // DESPESAS (agrupadas por origem, colapsáveis)
   h+=linhaSecao('DESPESAS',comps);
-  ['Recorrentes','Avulsos','Cartão','Empréstimos'].forEach(o=>{
+  ['Recorrentes','Pagamentos/Compras','Cartão','Empréstimos'].forEach(o=>{
     if(!despSub[o] || !Object.keys(despSub[o]).length) return;
     const aberto = fluxoGruposAbertos[o]===true;
     h+='<tr class="grp-origem" onclick="toggleFluxoGrupo('+JSON.stringify(o)+')"><td class="grupo">'+(aberto?'▾ ':'▸ ')+esc(o)+'</td>'
@@ -1322,13 +1387,15 @@ function marcadorOrigem(m){
   if(o==='PAGAMENTO'){ const card=p[0]==='CAR'?cartaoDaCompra(p[1]):''; return '<span class="pill p-comum">💳 Pagto c/ cartão'+(card?' · '+esc(card):'')+'</span>'; }
   if(o==='RECORRENTE'){ return '<span class="pill p-prev">🔁 Recorrente</span>'; }
   if(o==='EMPRÉSTIMO'||o==='EMPRESTIMO'){ return '<span class="pill p-prev">🏦 Empréstimo</span>'; }
-  return '<span class="pill" style="background:#EEF2F0;color:#5B6B63">✎ Avulso</span>';
+  return ((m.Tipo||'')==='ENTRADA')
+    ? '<span class="pill" style="background:#EEF2F0;color:#5B6B63">💵 Receita</span>'
+    : '<span class="pill" style="background:#EEF2F0;color:#5B6B63">💸 Pagamento/Compra</span>';
 }
 function renderMovimentos(){
   const fc = (document.getElementById('fMovComp').value||'').trim();
   let lista = DB.movimentos.filter(m=>passaPerfil(m.Perfil));
   if(fc) lista = lista.filter(m=>String(m.Competencia).indexOf(fc)>=0);
-  if(!lista.length){ document.getElementById('movTbl').innerHTML='<div class="vazio">Nenhum movimento avulso lançado.</div>'; return; }
+  if(!lista.length){ document.getElementById('movTbl').innerHTML='<div class="vazio">Nenhum movimento lançado.</div>'; return; }
   let h='<table><thead><tr><th>Código</th><th>Origem</th><th>Comp.</th><th>Data</th><th>Tipo</th><th>Grupo</th><th>Descrição</th><th>Pessoa</th><th class="num">Valor</th><th>Status</th><th></th></tr></thead><tbody>';
   lista.forEach(m=>{
     const st=(m.Status||'PAGO').toUpperCase();
@@ -1402,7 +1469,7 @@ function renderLancAvulso(tipo,elId){
   const arr=(DB.movimentos||[]).filter(m=>
     (m.Tipo||'')===tipo && String(m.Origem||'').toUpperCase()==='MANUAL' && passaPerfil(m.Perfil));
   arr.sort((a,b)=>chaveData(b)-chaveData(a));
-  if(!arr.length){ el.innerHTML='<p class="vazio">Nenhum lançamento avulso ainda.</p>'; return; }
+  if(!arr.length){ el.innerHTML='<p class="vazio">Nenhum lançamento ainda.</p>'; return; }
   const ent=tipo==='ENTRADA';
   let h='<table class="grid"><thead><tr><th>Data</th><th>Competência</th>'
     +'<th>'+(ent?'Grupo':'Categoria')+'</th><th>Descrição</th>'
@@ -1424,6 +1491,59 @@ function renderLancAvulso(tipo,elId){
 }
 function renderLancReceita(){ renderLancAvulso('ENTRADA','lancRecTbl'); }
 function renderLancPagamento(){ renderLancAvulso('SAÍDA','lancPagTbl'); }
+
+// ===== GRUPOS E CATEGORIAS (cadastro) =====
+function renderClassificacoes(){
+  renderCatLista('ENTRADA','GRUPO','catGruRecTbl','grupo de receita');
+  renderCatLista('SAÍDA','GRUPO','catGruDesTbl','grupo de despesa');
+  renderCatLista('SAÍDA','CATEGORIA','catCatDesTbl','categoria de despesa');
+}
+function renderCatLista(tipo,nivel,elId,rotulo){
+  const el=document.getElementById(elId); if(!el) return;
+  const arr=(DB.categorias||[]).filter(c=>
+    String(c.Tipo).toUpperCase()===tipo && String(c.Nivel).toUpperCase()===nivel);
+  arr.sort((a,b)=>String(a.Nome||'').localeCompare(String(b.Nome||''),'pt-BR'));
+  if(!arr.length){ el.innerHTML='<p class="vazio">Nenhum '+rotulo+' cadastrado.</p>'; return; }
+  let h='<table class="grid"><thead><tr><th>Nome</th><th>Ativo</th><th></th></tr></thead><tbody>';
+  arr.forEach(c=>{
+    h+='<tr><td>'+esc(c.Nome||'')+'</td>'
+      +'<td>'+(ativoSim(c.Ativo)?'<span class="pill p-prev">Ativo</span>':'<span class="pill p-comum">Inativo</span>')+'</td>'
+      +'<td class="acoes"><button class="btn-mini" onclick="abrirCategoria(\''+c.ID+'\')">✏️</button>'
+      +'<button class="btn-mini" onclick="excluirReg(\'Categorias\',\''+c.ID+'\')">🗑️</button></td></tr>';
+  });
+  h+='</tbody></table>';
+  el.innerHTML=h;
+}
+let _catCtx=null;
+function abrirCategoria(id,tipoForcado,nivelForcado){
+  const c=id?(DB.categorias||[]).find(x=>x.ID===id):null;
+  const tipo=c?String(c.Tipo).toUpperCase():tipoForcado;
+  const nivel=c?String(c.Nivel).toUpperCase():nivelForcado;
+  _catCtx={c};
+  const nome= nivel==='CATEGORIA' ? 'categoria de despesa'
+            : (tipo==='ENTRADA' ? 'grupo de receita' : 'grupo de despesa');
+  document.getElementById('modalT').textContent=(c?'Editar ':'Novo ')+nome;
+  document.getElementById('modalC').innerHTML=
+     '<input type="hidden" id="cat-id" value="'+(c?esc(c.ID):'')+'">'
+    +'<input type="hidden" id="cat-tipo" value="'+tipo+'">'
+    +'<input type="hidden" id="cat-nivel" value="'+nivel+'">'
+    +'<div class="grid full">'+fld('Nome','<input id="cat-nome" value="'+(c?esc(c.Nome):'')+'" placeholder="Ex.: '+(nivel==='CATEGORIA'?'LAZER':'VIAGENS')+'">')+'</div>'
+    +'<div class="grid">'+fld('Ativo','<select id="cat-ativo">'+['SIM','NÃO'].map(t=>opt(t,c?(ativoSim(c.Ativo)?'SIM':'NÃO'):'SIM')).join('')+'</select>')+'</div>'
+    +'<div class="acoes"><button class="btn-ghost" onclick="fecharModal()">Cancelar</button><button class="btn green" id="cat-save" onclick="salvarCategoria()">Salvar</button></div>';
+  abrirModal();
+}
+async function salvarCategoria(){
+  const get=id=>{const e=document.getElementById(id); return e?e.value:'';};
+  const reg={ID:get('cat-id')||undefined,Tipo:get('cat-tipo'),Nivel:get('cat-nivel'),
+    Nome:get('cat-nome').trim().toUpperCase(),Ativo:get('cat-ativo')};
+  if(!reg.Nome){ alert('Preencha o nome.'); return; }
+  // evita duplicado (mesmo tipo+nível+nome)
+  const dup=(DB.categorias||[]).some(c=>c.ID!==reg.ID
+    && String(c.Tipo).toUpperCase()===reg.Tipo && String(c.Nivel).toUpperCase()===reg.Nivel
+    && String(c.Nome).trim().toUpperCase()===reg.Nome);
+  if(dup){ alert('Já existe um item com esse nome.'); return; }
+  await salvarReg('Categorias',reg,'cat-save');
+}
 
 // ===== EXTRATO BANCÁRIO =====
 // Toda a movimentação REALIZADA (PAGO) de uma conta, com saldo correndo.
