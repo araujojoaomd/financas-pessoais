@@ -299,7 +299,7 @@ tbody tr:hover{background:#F3F8F5}
       <button class="btn green" onclick="abrirMovimento(null,null,'SAÍDA')">+ Novo pagamento</button>
     </div>
     <div class="tbl-wrap"><div id="lancPagTbl"></div></div>
-    <p style="font-size:11.5px;color:#5B6B63;margin-top:10px">Despesa avulsa paga direto de uma conta. Para contas fixas mensais use <b>Pagamentos Recorrentes</b>; para cartão use <b>Compras no Cartão</b>.</p>
+    <p style="font-size:11.5px;color:#5B6B63;margin-top:10px">Pagamento avulso pago direto de uma conta. Para contas fixas mensais use <b>Pagamentos Recorrentes</b>; para cartão use <b>Compras no Cartão</b>.</p>
   </div>
 
   <!-- RECEITAS RECORRENTES -->
@@ -321,7 +321,7 @@ tbody tr:hover{background:#F3F8F5}
       <button class="btn green" onclick="abrirRecorrente(null,'SAÍDA')">+ Novo pagamento recorrente</button>
     </div>
     <div class="tbl-wrap"><div id="recPagTbl"></div></div>
-    <p style="font-size:11.5px;color:#5B6B63;margin-top:10px">Despesas fixas mensais (internet, escola, plano de saúde). Marque <b>descontado em folha</b> se sai direto do salário.</p>
+    <p style="font-size:11.5px;color:#5B6B63;margin-top:10px">Pagamentos fixos mensais (internet, escola, plano de saúde). Marque <b>descontado em folha</b> se sai direto do salário.</p>
   </div>
 
   <!-- EXTRATO BANCÁRIO -->
@@ -402,7 +402,7 @@ tbody tr:hover{background:#F3F8F5}
       </div>
       <div class="tbl-wrap"><div id="categoriaCadTbl"></div></div>
     </div>
-    <p style="font-size:11.5px;color:#5B6B63;margin-top:12px">O <b>grupo</b> é a visão macro e tem um tipo: <b>receita</b> (ex.: SALÁRIO) ou <b>despesa</b> (ex.: CARRO, CASA ALDEIA). A <b>categoria</b> é o detalhe e fica vinculada a um grupo (ex.: TRANSPORTE dentro de CARRO). Grupos internos do sistema (cartão, empréstimo) são sempre mantidos.</p>
+    <p style="font-size:11.5px;color:#5B6B63;margin-top:12px">O <b>grupo</b> é a visão macro e tem um tipo: <b>receita</b> (ex.: SALÁRIO) ou <b>pagamento/compra</b> (ex.: CARRO, CASA ALDEIA). A <b>categoria</b> é o detalhe e fica sempre vinculada a um grupo de pagamento/compra (ex.: TRANSPORTE dentro de CARRO). Grupos internos do sistema (cartão, empréstimo) são sempre mantidos.</p>
   </div>
 
   <!-- CONFIG -->
@@ -1148,7 +1148,7 @@ function renderFluxo(){
   h+='</tbody></table>';
   document.getElementById('fluxoTbl').innerHTML = h;
   document.getElementById('fluxoNota').innerHTML = regimeFluxo==='GASTO'
-    ? '<b>Regime de gasto (competência):</b> a despesa aparece no mês em que você comprou/consumiu. Compra no cartão entra no mês da compra.'
+    ? '<b>Regime de gasto (competência):</b> o pagamento/compra aparece no mês em que você comprou/consumiu. Compra no cartão entra no mês da compra.'
     : '<b>Regime de caixa (desembolso):</b> a saída aparece no mês em que o dinheiro de fato sai — para cartão, no vencimento da fatura. É a lente que bate com o saldo do banco.';
 }
 function card(lbl,val,cls){ return '<div class="rcard"><div class="lbl">'+lbl+'</div><div class="val '+cls+'">'+val+'</div></div>'; }
@@ -1527,7 +1527,7 @@ function renderGruposCad(){
   arr.forEach(c=>{
     const ent=String(c.Tipo||'').toUpperCase()==='ENTRADA';
     h+='<tr><td>'+esc(c.Nome||'')+'</td>'
-      +'<td>'+(ent?'<span class="pill p-prev">Receita</span>':'<span class="pill p-comum">Despesa</span>')+'</td>'
+      +'<td>'+(ent?'<span class="pill p-prev">Receita</span>':'<span class="pill p-comum">Pagamento/Compra</span>')+'</td>'
       +'<td>'+(ativoSim(c.Ativo)?'Ativo':'Inativo')+'</td>'
       +'<td class="acoes"><button class="btn-mini" onclick="abrirGrupo(\''+c.ID+'\')">✏️</button>'
       +'<button class="btn-mini" onclick="excluirReg(\'Categorias\',\''+c.ID+'\')">🗑️</button></td></tr>';
@@ -1561,7 +1561,7 @@ function abrirGrupo(id){
     +'<input type="hidden" id="grp-nivel" value="GRUPO">'
     +'<div class="grid full">'+fld('Nome do grupo','<input id="grp-nome" value="'+(c?esc(c.Nome):'')+'" placeholder="Ex.: CARRO, CASA ALDEIA, SALÁRIO">')+'</div>'
     +'<div class="grid">'
-      +fld('Tipo','<select id="grp-tipo">'+[['SAÍDA','Despesa'],['ENTRADA','Receita']].map(t=>'<option value="'+t[0]+'"'+(t[0]===tipo?' selected':'')+'>'+t[1]+'</option>').join('')+'</select>')
+      +fld('Tipo','<select id="grp-tipo">'+[['SAÍDA','Pagamento/Compra'],['ENTRADA','Receita']].map(t=>'<option value="'+t[0]+'"'+(t[0]===tipo?' selected':'')+'>'+t[1]+'</option>').join('')+'</select>')
       +fld('Ativo','<select id="grp-ativo">'+['SIM','NÃO'].map(t=>opt(t,c?(ativoSim(c.Ativo)?'SIM':'NÃO'):'SIM')).join('')+'</select>')
     +'</div>'
     +'<div class="acoes"><button class="btn-ghost" onclick="fecharModal()">Cancelar</button><button class="btn green" id="grp-save" onclick="salvarGrupo()">Salvar</button></div>';
@@ -1581,11 +1581,11 @@ async function salvarGrupo(){
 // --- Categoria (vinculada a um grupo) ---
 function abrirCategoria(id){
   const c=id?(DB.categorias||[]).find(x=>x.ID===id):null;
-  const grupos=(DB.categorias||[]).filter(g=>nivelEh(g,'GRUPO')&&ativoSim(g.Ativo))
-    .sort((a,b)=>String(a.Tipo).localeCompare(String(b.Tipo))||String(a.Nome).localeCompare(String(b.Nome),'pt-BR'));
-  if(!grupos.length){ alert('Cadastre um grupo primeiro.'); return; }
+  const grupos=(DB.categorias||[]).filter(g=>nivelEh(g,'GRUPO')&&String(g.Tipo).toUpperCase()==='SAÍDA'&&ativoSim(g.Ativo))
+    .sort((a,b)=>String(a.Nome).localeCompare(String(b.Nome),'pt-BR'));
+  if(!grupos.length){ alert('Cadastre um grupo de Pagamento/Compra primeiro.'); return; }
   const grpSel=c?c.GrupoRef:grupos[0].ID;
-  const optsGrp=grupos.map(g=>'<option value="'+esc(g.ID)+'"'+(g.ID===grpSel?' selected':'')+'>'+esc(g.Nome)+(String(g.Tipo).toUpperCase()==='ENTRADA'?' (receita)':' (despesa)')+'</option>').join('');
+  const optsGrp=grupos.map(g=>'<option value="'+esc(g.ID)+'"'+(g.ID===grpSel?' selected':'')+'>'+esc(g.Nome)+'</option>').join('');
   document.getElementById('modalT').textContent=(c?'Editar categoria':'Nova categoria');
   document.getElementById('modalC').innerHTML=
      '<input type="hidden" id="cat-id" value="'+(c?esc(c.ID):'')+'">'
@@ -1905,7 +1905,7 @@ function abrirPagar(o){
   document.getElementById('modalT').textContent=o.titulo;
   let info = o.modo==='fatura'
     ? '<div style="font-size:12px;color:#5B6B63;margin-bottom:10px">Total da fatura '+brl(o.ctx.total)+' · já pago '+brl(o.ctx.pago)+' · <b>falta '+brl(o.ctx.falta)+'</b>. Pode pagar parcial.</div>'
-    : '<div style="font-size:12px;color:#5B6B63;margin-bottom:10px">Pague esta despesa de uma conta (sai do banco) ou de um cartão (vira parcela na fatura do cartão).</div>';
+    : '<div style="font-size:12px;color:#5B6B63;margin-bottom:10px">Pague isto de uma conta (sai do banco) ou de um cartão (vira parcela na fatura do cartão).</div>';
   document.getElementById('modalC').innerHTML = info
    +'<div class="grid">'
      +fld(ehEntrada?'Receber em':'Pagar com','<select id="pg-forma" onchange="atualizarPagar()"><option value="CONTA">Conta bancária</option>'+(ehEntrada?'':'<option value="CARTAO">Cartão (entra na fatura dele)</option>')+'</select>')
