@@ -388,29 +388,21 @@ tbody tr:hover{background:#F3F8F5}
     <div class="toolbar"><h2>Grupos e categorias</h2></div>
     <div class="card-sec">
       <div class="toolbar" style="margin:0 0 8px">
-        <h3 style="margin:0">Grupos de receita</h3>
+        <h3 style="margin:0">Grupos</h3>
         <div class="sep"></div>
-        <button class="btn green" onclick="abrirCategoria(null,'ENTRADA','GRUPO')">+ Novo grupo de receita</button>
+        <button class="btn green" onclick="abrirGrupo(null)">+ Novo grupo</button>
       </div>
-      <div class="tbl-wrap"><div id="catGruRecTbl"></div></div>
+      <div class="tbl-wrap"><div id="grupoCadTbl"></div></div>
     </div>
     <div class="card-sec" style="margin-top:18px">
       <div class="toolbar" style="margin:0 0 8px">
-        <h3 style="margin:0">Grupos de despesa</h3>
+        <h3 style="margin:0">Categorias</h3>
         <div class="sep"></div>
-        <button class="btn green" onclick="abrirCategoria(null,'SAÍDA','GRUPO')">+ Novo grupo de despesa</button>
+        <button class="btn green" onclick="abrirCategoria(null)">+ Nova categoria</button>
       </div>
-      <div class="tbl-wrap"><div id="catGruDesTbl"></div></div>
+      <div class="tbl-wrap"><div id="categoriaCadTbl"></div></div>
     </div>
-    <div class="card-sec" style="margin-top:18px">
-      <div class="toolbar" style="margin:0 0 8px">
-        <h3 style="margin:0">Categorias de despesa</h3>
-        <div class="sep"></div>
-        <button class="btn green" onclick="abrirCategoria(null,'SAÍDA','CATEGORIA')">+ Nova categoria de despesa</button>
-      </div>
-      <div class="tbl-wrap"><div id="catCatDesTbl"></div></div>
-    </div>
-    <p style="font-size:11.5px;color:#5B6B63;margin-top:12px"><b>Grupo</b> é a visão macro (ex.: CARRO, CASA ALDEIA); <b>categoria</b> é o detalhe da despesa (ex.: ALIMENTAÇÃO, SAÚDE). Receitas só têm grupo. Grupos internos do sistema (cartão, empréstimo) são sempre mantidos.</p>
+    <p style="font-size:11.5px;color:#5B6B63;margin-top:12px">O <b>grupo</b> é a visão macro e tem um tipo: <b>receita</b> (ex.: SALÁRIO) ou <b>despesa</b> (ex.: CARRO, CASA ALDEIA). A <b>categoria</b> é o detalhe e fica vinculada a um grupo (ex.: TRANSPORTE dentro de CARRO). Grupos internos do sistema (cartão, empréstimo) são sempre mantidos.</p>
   </div>
 
   <!-- CONFIG -->
@@ -448,13 +440,47 @@ let GRUPOS_RENDA = DEF_GRUPOS_RENDA.slice();
 let CATEGORIAS = DEF_CATEGORIAS.slice();
 function uniq(a){ return a.filter((v,i)=>a.indexOf(v)===i); }
 function ativoSim(v){ const s=String(v==null?'SIM':v).toUpperCase().trim(); return s!=='NÃO'&&s!=='NAO'&&s!=='FALSE'&&s!=='0'&&s!=='NÃO '; }
+function nivelEh(c,nv){ return String(c.Nivel||'').toUpperCase()===nv; }
+function nomeEq(a,b){ return String(a||'').trim().toUpperCase()===String(b||'').trim().toUpperCase(); }
+// Grupos cadastrados (objetos) de um tipo (ENTRADA/SAÍDA), só ativos.
+function gruposCad(tipo){ return (DB.categorias||[]).filter(c=>nivelEh(c,'GRUPO') && String(c.Tipo||'').toUpperCase()===tipo && ativoSim(c.Ativo)); }
+// Objeto do grupo a partir do nome (qualquer tipo).
+function grupoPorNome(nome){ return (DB.categorias||[]).find(c=>nivelEh(c,'GRUPO') && nomeEq(c.Nome,nome)); }
+// Nomes das categorias vinculadas a um grupo (pelo nome do grupo).
+function categoriasDoGrupoNome(grupoNome){
+  const g=grupoPorNome(grupoNome); if(!g) return [];
+  return (DB.categorias||[]).filter(c=>nivelEh(c,'CATEGORIA') && c.GrupoRef===g.ID && ativoSim(c.Ativo)).map(c=>String(c.Nome).trim()).filter(Boolean);
+}
 function recomputarClassificacoes(){
   const cats=(DB.categorias||[]).filter(c=>ativoSim(c.Ativo));
-  const sel=(tp,nv)=>cats.filter(c=>String(c.Tipo).toUpperCase()===tp&&String(c.Nivel).toUpperCase()===nv).map(c=>String(c.Nome).trim()).filter(Boolean);
-  const gSai=sel('SAÍDA','GRUPO'), gRen=sel('ENTRADA','GRUPO'), cat=sel('SAÍDA','CATEGORIA');
+  const gSai=cats.filter(c=>nivelEh(c,'GRUPO')&&String(c.Tipo).toUpperCase()==='SAÍDA').map(c=>String(c.Nome).trim()).filter(Boolean);
+  const gRen=cats.filter(c=>nivelEh(c,'GRUPO')&&String(c.Tipo).toUpperCase()==='ENTRADA').map(c=>String(c.Nome).trim()).filter(Boolean);
+  // Categorias (lista plana) = categorias vinculadas a grupos de DESPESA.
+  const idsSaida=new Set(cats.filter(c=>nivelEh(c,'GRUPO')&&String(c.Tipo).toUpperCase()==='SAÍDA').map(c=>c.ID));
+  const cat=cats.filter(c=>nivelEh(c,'CATEGORIA')&&idsSaida.has(c.GrupoRef)).map(c=>String(c.Nome).trim()).filter(Boolean);
   GRUPOS_SAIDA = gSai.length ? uniq(gSai.concat(SYS_GRUPOS_SAIDA)) : DEF_GRUPOS_SAIDA.slice();
   GRUPOS_RENDA = gRen.length ? gRen : DEF_GRUPOS_RENDA.slice();
-  CATEGORIAS   = cat.length  ? cat                              : DEF_CATEGORIAS.slice();
+  CATEGORIAS   = cat.length  ? uniq(cat)                          : DEF_CATEGORIAS.slice();
+}
+// Opções <option> de categoria filtradas pelo grupo escolhido (preserva valor atual ao editar).
+function optsCat(grupoNome, sel){
+  let lista=categoriasDoGrupoNome(grupoNome);
+  if(sel && lista.indexOf(sel)<0) lista=[sel].concat(lista);
+  if(!lista.length) return '<option value="">(sem categoria)</option>';
+  return lista.map(c=>opt(c,sel)).join('');
+}
+// Repopular o select de categoria quando o grupo muda.
+function recarregarCatSelect(grupoSelId, catSelId){
+  const gs=document.getElementById(grupoSelId), cs=document.getElementById(catSelId);
+  if(!gs||!cs) return;
+  cs.innerHTML=optsCat(gs.value, '');
+}
+// Par de campos Grupo + Categoria (despesa), com filtro encadeado.
+function camposGrupoCat(prefix, grupoSel, catSel){
+  const gid=prefix+'-grupo', cid=prefix+'-cat';
+  const gAtual = grupoSel || GRUPOS_SAIDA[0] || '';
+  return fld('Grupo','<select id="'+gid+'" onchange="recarregarCatSelect(\''+gid+'\',\''+cid+'\')">'+GRUPOS_SAIDA.map(g=>opt(g,gAtual)).join('')+'</select>')
+       + fld('Categoria','<select id="'+cid+'">'+optsCat(gAtual,catSel)+'</select>');
 }
 const TIPOS_EMPRESTIMO = ['Consignado','Financiamento Imobiliário','Veículo','Empréstimo Pessoal','Outros'];
 function ehConsignado(e){ return String(e&&e.Tipo||'').toUpperCase().indexOf('CONSIGN')>=0; }
@@ -561,19 +587,19 @@ function demo(){
     ],
     config:[],
     categorias:[
-      {ID:'CG-1',Tipo:'ENTRADA',Nivel:'GRUPO',Nome:'SALÁRIO',Ativo:'SIM'},
-      {ID:'CG-2',Tipo:'ENTRADA',Nivel:'GRUPO',Nome:'OUTRAS RENDAS',Ativo:'SIM'},
-      {ID:'CG-3',Tipo:'SAÍDA',Nivel:'GRUPO',Nome:'CARRO',Ativo:'SIM'},
-      {ID:'CG-4',Tipo:'SAÍDA',Nivel:'GRUPO',Nome:'APT PARNAMIRIM',Ativo:'SIM'},
-      {ID:'CG-5',Tipo:'SAÍDA',Nivel:'GRUPO',Nome:'CASA ALDEIA',Ativo:'SIM'},
-      {ID:'CG-6',Tipo:'SAÍDA',Nivel:'GRUPO',Nome:'GASTOS PESSOAIS',Ativo:'SIM'},
-      {ID:'CG-7',Tipo:'SAÍDA',Nivel:'CATEGORIA',Nome:'ALIMENTAÇÃO',Ativo:'SIM'},
-      {ID:'CG-8',Tipo:'SAÍDA',Nivel:'CATEGORIA',Nome:'MORADIA',Ativo:'SIM'},
-      {ID:'CG-9',Tipo:'SAÍDA',Nivel:'CATEGORIA',Nome:'TRANSPORTE',Ativo:'SIM'},
-      {ID:'CG-10',Tipo:'SAÍDA',Nivel:'CATEGORIA',Nome:'SAÚDE',Ativo:'SIM'},
-      {ID:'CG-11',Tipo:'SAÍDA',Nivel:'CATEGORIA',Nome:'GASTO PESSOAL',Ativo:'SIM'},
-      {ID:'CG-12',Tipo:'SAÍDA',Nivel:'CATEGORIA',Nome:'OBRAS CASA DE ALDEIA',Ativo:'SIM'},
-      {ID:'CG-13',Tipo:'SAÍDA',Nivel:'CATEGORIA',Nome:'SAQUE',Ativo:'SIM'}
+      {ID:'CG-1',Tipo:'ENTRADA',Nivel:'GRUPO',Nome:'SALÁRIO',GrupoRef:'',Ativo:'SIM'},
+      {ID:'CG-2',Tipo:'ENTRADA',Nivel:'GRUPO',Nome:'OUTRAS RENDAS',GrupoRef:'',Ativo:'SIM'},
+      {ID:'CG-3',Tipo:'SAÍDA',Nivel:'GRUPO',Nome:'CARRO',GrupoRef:'',Ativo:'SIM'},
+      {ID:'CG-4',Tipo:'SAÍDA',Nivel:'GRUPO',Nome:'APT PARNAMIRIM',GrupoRef:'',Ativo:'SIM'},
+      {ID:'CG-5',Tipo:'SAÍDA',Nivel:'GRUPO',Nome:'CASA ALDEIA',GrupoRef:'',Ativo:'SIM'},
+      {ID:'CG-6',Tipo:'SAÍDA',Nivel:'GRUPO',Nome:'GASTOS PESSOAIS',GrupoRef:'',Ativo:'SIM'},
+      {ID:'CG-7',Tipo:'SAÍDA',Nivel:'CATEGORIA',Nome:'ALIMENTAÇÃO',GrupoRef:'CG-6',Ativo:'SIM'},
+      {ID:'CG-8',Tipo:'SAÍDA',Nivel:'CATEGORIA',Nome:'MORADIA',GrupoRef:'CG-4',Ativo:'SIM'},
+      {ID:'CG-9',Tipo:'SAÍDA',Nivel:'CATEGORIA',Nome:'TRANSPORTE',GrupoRef:'CG-3',Ativo:'SIM'},
+      {ID:'CG-10',Tipo:'SAÍDA',Nivel:'CATEGORIA',Nome:'SAÚDE',GrupoRef:'CG-6',Ativo:'SIM'},
+      {ID:'CG-11',Tipo:'SAÍDA',Nivel:'CATEGORIA',Nome:'GASTO PESSOAL',GrupoRef:'CG-6',Ativo:'SIM'},
+      {ID:'CG-12',Tipo:'SAÍDA',Nivel:'CATEGORIA',Nome:'OBRAS CASA DE ALDEIA',GrupoRef:'CG-5',Ativo:'SIM'},
+      {ID:'CG-13',Tipo:'SAÍDA',Nivel:'CATEGORIA',Nome:'SAQUE',GrupoRef:'CG-6',Ativo:'SIM'}
     ]
   };
   recomputarClassificacoes();
@@ -1164,8 +1190,7 @@ function abrirLancCartao(id){
    +'</div>'
    +'<div class="grid full">'+fld('Descrição','<input id="lc-desc" value="'+(c?esc(c.Descricao):'')+'" placeholder="Descreva a operação">')+'</div>'
    +'<div id="lc-box-grupo" class="grid">'
-     +fld('Grupo','<select id="lc-grupo">'+GRUPOS_SAIDA.map(g=>opt(g,c&&c.Grupo)).join('')+'</select>')
-     +fld('Categoria','<select id="lc-cat">'+CATEGORIAS.map(g=>opt(g,c&&c.Categoria)).join('')+'</select>')
+     +camposGrupoCat('lc', c&&c.Grupo, c&&c.Categoria)
    +'</div>'
    +'<div id="lc-box-pixproprio" style="display:none"><div class="grid">'
      +fld('Conta que recebeu','<select id="lc-pixconta">'+optsContas(contaPadrao())+'</select>')
@@ -1333,8 +1358,7 @@ function renderRecorrenteCampos(tipo){
   } else {
     const ef = r && String(r.EmFolha).toUpperCase()==='SIM';
     h+='<div class="grid">'
-      +fld('Grupo','<select id="r-grupo">'+GRUPOS_SAIDA.map(g=>opt(g,r&&r.Grupo)).join('')+'</select>')
-      +fld('Categoria','<select id="r-cat">'+CATEGORIAS.map(g=>opt(g,r&&r.Categoria)).join('')+'</select>')
+      +camposGrupoCat('r', r&&r.Grupo, r&&r.Categoria)
      +'</div>'
      +'<div class="grid">'
        +fld('Valor padrão (R$)','<input id="r-valor" inputmode="decimal" value="'+(r?String(parseValor(r.ValorPadrao)).replace('.',','):'')+'">')
@@ -1439,8 +1463,7 @@ function renderMovimentoCampos(tipo){
      +'</div>';
   } else {
     h+='<div class="grid">'
-      +fld('Grupo','<select id="mv-grupo">'+GRUPOS_SAIDA.map(g=>opt(g,m&&m.Grupo)).join('')+'</select>')
-      +fld('Categoria','<select id="mv-cat">'+CATEGORIAS.map(g=>opt(g,m&&m.Categoria)).join('')+'</select>')
+      +camposGrupoCat('mv', m&&m.Grupo, m&&m.Categoria)
      +'</div>'
      +'<div class="grid full">'+fld('Valor (R$)','<input id="mv-valor" inputmode="decimal" value="'+(m?String(parseValor(m.Valor)).replace('.',','):'')+'">')+'</div>';
   }
@@ -1493,55 +1516,97 @@ function renderLancReceita(){ renderLancAvulso('ENTRADA','lancRecTbl'); }
 function renderLancPagamento(){ renderLancAvulso('SAÍDA','lancPagTbl'); }
 
 // ===== GRUPOS E CATEGORIAS (cadastro) =====
-function renderClassificacoes(){
-  renderCatLista('ENTRADA','GRUPO','catGruRecTbl','grupo de receita');
-  renderCatLista('SAÍDA','GRUPO','catGruDesTbl','grupo de despesa');
-  renderCatLista('SAÍDA','CATEGORIA','catCatDesTbl','categoria de despesa');
+function renderClassificacoes(){ renderGruposCad(); renderCategoriasCad(); }
+
+function renderGruposCad(){
+  const el=document.getElementById('grupoCadTbl'); if(!el) return;
+  const arr=(DB.categorias||[]).filter(c=>nivelEh(c,'GRUPO'));
+  arr.sort((a,b)=>String(a.Tipo||'').localeCompare(String(b.Tipo||''))||String(a.Nome||'').localeCompare(String(b.Nome||''),'pt-BR'));
+  if(!arr.length){ el.innerHTML='<p class="vazio">Nenhum grupo cadastrado.</p>'; return; }
+  let h='<table class="grid"><thead><tr><th>Grupo</th><th>Tipo</th><th>Ativo</th><th></th></tr></thead><tbody>';
+  arr.forEach(c=>{
+    const ent=String(c.Tipo||'').toUpperCase()==='ENTRADA';
+    h+='<tr><td>'+esc(c.Nome||'')+'</td>'
+      +'<td>'+(ent?'<span class="pill p-prev">Receita</span>':'<span class="pill p-comum">Despesa</span>')+'</td>'
+      +'<td>'+(ativoSim(c.Ativo)?'Ativo':'Inativo')+'</td>'
+      +'<td class="acoes"><button class="btn-mini" onclick="abrirGrupo(\''+c.ID+'\')">✏️</button>'
+      +'<button class="btn-mini" onclick="excluirReg(\'Categorias\',\''+c.ID+'\')">🗑️</button></td></tr>';
+  });
+  el.innerHTML=h+'</tbody></table>';
 }
-function renderCatLista(tipo,nivel,elId,rotulo){
-  const el=document.getElementById(elId); if(!el) return;
-  const arr=(DB.categorias||[]).filter(c=>
-    String(c.Tipo).toUpperCase()===tipo && String(c.Nivel).toUpperCase()===nivel);
-  arr.sort((a,b)=>String(a.Nome||'').localeCompare(String(b.Nome||''),'pt-BR'));
-  if(!arr.length){ el.innerHTML='<p class="vazio">Nenhum '+rotulo+' cadastrado.</p>'; return; }
-  let h='<table class="grid"><thead><tr><th>Nome</th><th>Ativo</th><th></th></tr></thead><tbody>';
+function renderCategoriasCad(){
+  const el=document.getElementById('categoriaCadTbl'); if(!el) return;
+  const arr=(DB.categorias||[]).filter(c=>nivelEh(c,'CATEGORIA'));
+  const nomeGrupo=id=>{ const g=(DB.categorias||[]).find(x=>x.ID===id); return g?g.Nome:'(sem grupo)'; };
+  arr.sort((a,b)=>String(nomeGrupo(a.GrupoRef)).localeCompare(String(nomeGrupo(b.GrupoRef)),'pt-BR')||String(a.Nome||'').localeCompare(String(b.Nome||''),'pt-BR'));
+  if(!arr.length){ el.innerHTML='<p class="vazio">Nenhuma categoria cadastrada.</p>'; return; }
+  let h='<table class="grid"><thead><tr><th>Categoria</th><th>Grupo</th><th>Ativo</th><th></th></tr></thead><tbody>';
   arr.forEach(c=>{
     h+='<tr><td>'+esc(c.Nome||'')+'</td>'
-      +'<td>'+(ativoSim(c.Ativo)?'<span class="pill p-prev">Ativo</span>':'<span class="pill p-comum">Inativo</span>')+'</td>'
+      +'<td>'+esc(nomeGrupo(c.GrupoRef))+'</td>'
+      +'<td>'+(ativoSim(c.Ativo)?'Ativo':'Inativo')+'</td>'
       +'<td class="acoes"><button class="btn-mini" onclick="abrirCategoria(\''+c.ID+'\')">✏️</button>'
       +'<button class="btn-mini" onclick="excluirReg(\'Categorias\',\''+c.ID+'\')">🗑️</button></td></tr>';
   });
-  h+='</tbody></table>';
-  el.innerHTML=h;
+  el.innerHTML=h+'</tbody></table>';
 }
-let _catCtx=null;
-function abrirCategoria(id,tipoForcado,nivelForcado){
+
+// --- Grupo (receita ou despesa) ---
+function abrirGrupo(id){
   const c=id?(DB.categorias||[]).find(x=>x.ID===id):null;
-  const tipo=c?String(c.Tipo).toUpperCase():tipoForcado;
-  const nivel=c?String(c.Nivel).toUpperCase():nivelForcado;
-  _catCtx={c};
-  const nome= nivel==='CATEGORIA' ? 'categoria de despesa'
-            : (tipo==='ENTRADA' ? 'grupo de receita' : 'grupo de despesa');
-  document.getElementById('modalT').textContent=(c?'Editar ':'Novo ')+nome;
+  const tipo=c?String(c.Tipo).toUpperCase():'SAÍDA';
+  document.getElementById('modalT').textContent=(c?'Editar grupo':'Novo grupo');
+  document.getElementById('modalC').innerHTML=
+     '<input type="hidden" id="grp-id" value="'+(c?esc(c.ID):'')+'">'
+    +'<input type="hidden" id="grp-nivel" value="GRUPO">'
+    +'<div class="grid full">'+fld('Nome do grupo','<input id="grp-nome" value="'+(c?esc(c.Nome):'')+'" placeholder="Ex.: CARRO, CASA ALDEIA, SALÁRIO">')+'</div>'
+    +'<div class="grid">'
+      +fld('Tipo','<select id="grp-tipo">'+[['SAÍDA','Despesa'],['ENTRADA','Receita']].map(t=>'<option value="'+t[0]+'"'+(t[0]===tipo?' selected':'')+'>'+t[1]+'</option>').join('')+'</select>')
+      +fld('Ativo','<select id="grp-ativo">'+['SIM','NÃO'].map(t=>opt(t,c?(ativoSim(c.Ativo)?'SIM':'NÃO'):'SIM')).join('')+'</select>')
+    +'</div>'
+    +'<div class="acoes"><button class="btn-ghost" onclick="fecharModal()">Cancelar</button><button class="btn green" id="grp-save" onclick="salvarGrupo()">Salvar</button></div>';
+  abrirModal();
+}
+async function salvarGrupo(){
+  const get=id=>{const e=document.getElementById(id); return e?e.value:'';};
+  const reg={ID:get('grp-id')||undefined,Nivel:'GRUPO',Tipo:get('grp-tipo'),
+    Nome:get('grp-nome').trim().toUpperCase(),GrupoRef:'',Ativo:get('grp-ativo')};
+  if(!reg.Nome){ alert('Preencha o nome do grupo.'); return; }
+  const dup=(DB.categorias||[]).some(c=>c.ID!==reg.ID && nivelEh(c,'GRUPO')
+    && String(c.Tipo).toUpperCase()===reg.Tipo && nomeEq(c.Nome,reg.Nome));
+  if(dup){ alert('Já existe um grupo com esse nome e tipo.'); return; }
+  await salvarReg('Categorias',reg,'grp-save');
+}
+
+// --- Categoria (vinculada a um grupo) ---
+function abrirCategoria(id){
+  const c=id?(DB.categorias||[]).find(x=>x.ID===id):null;
+  const grupos=(DB.categorias||[]).filter(g=>nivelEh(g,'GRUPO')&&ativoSim(g.Ativo))
+    .sort((a,b)=>String(a.Tipo).localeCompare(String(b.Tipo))||String(a.Nome).localeCompare(String(b.Nome),'pt-BR'));
+  if(!grupos.length){ alert('Cadastre um grupo primeiro.'); return; }
+  const grpSel=c?c.GrupoRef:grupos[0].ID;
+  const optsGrp=grupos.map(g=>'<option value="'+esc(g.ID)+'"'+(g.ID===grpSel?' selected':'')+'>'+esc(g.Nome)+(String(g.Tipo).toUpperCase()==='ENTRADA'?' (receita)':' (despesa)')+'</option>').join('');
+  document.getElementById('modalT').textContent=(c?'Editar categoria':'Nova categoria');
   document.getElementById('modalC').innerHTML=
      '<input type="hidden" id="cat-id" value="'+(c?esc(c.ID):'')+'">'
-    +'<input type="hidden" id="cat-tipo" value="'+tipo+'">'
-    +'<input type="hidden" id="cat-nivel" value="'+nivel+'">'
-    +'<div class="grid full">'+fld('Nome','<input id="cat-nome" value="'+(c?esc(c.Nome):'')+'" placeholder="Ex.: '+(nivel==='CATEGORIA'?'LAZER':'VIAGENS')+'">')+'</div>'
+    +'<input type="hidden" id="cat-nivel" value="CATEGORIA">'
+    +'<div class="grid full">'+fld('Nome da categoria','<input id="cat-nome" value="'+(c?esc(c.Nome):'')+'" placeholder="Ex.: TRANSPORTE, ALIMENTAÇÃO">')+'</div>'
+    +'<div class="grid full">'+fld('Grupo a que pertence','<select id="cat-grupo">'+optsGrp+'</select>')+'</div>'
     +'<div class="grid">'+fld('Ativo','<select id="cat-ativo">'+['SIM','NÃO'].map(t=>opt(t,c?(ativoSim(c.Ativo)?'SIM':'NÃO'):'SIM')).join('')+'</select>')+'</div>'
     +'<div class="acoes"><button class="btn-ghost" onclick="fecharModal()">Cancelar</button><button class="btn green" id="cat-save" onclick="salvarCategoria()">Salvar</button></div>';
   abrirModal();
 }
 async function salvarCategoria(){
   const get=id=>{const e=document.getElementById(id); return e?e.value:'';};
-  const reg={ID:get('cat-id')||undefined,Tipo:get('cat-tipo'),Nivel:get('cat-nivel'),
-    Nome:get('cat-nome').trim().toUpperCase(),Ativo:get('cat-ativo')};
-  if(!reg.Nome){ alert('Preencha o nome.'); return; }
-  // evita duplicado (mesmo tipo+nível+nome)
-  const dup=(DB.categorias||[]).some(c=>c.ID!==reg.ID
-    && String(c.Tipo).toUpperCase()===reg.Tipo && String(c.Nivel).toUpperCase()===reg.Nivel
-    && String(c.Nome).trim().toUpperCase()===reg.Nome);
-  if(dup){ alert('Já existe um item com esse nome.'); return; }
+  const grupoId=get('cat-grupo');
+  const grupo=(DB.categorias||[]).find(g=>g.ID===grupoId);
+  const reg={ID:get('cat-id')||undefined,Nivel:'CATEGORIA',Tipo:grupo?grupo.Tipo:'SAÍDA',
+    Nome:get('cat-nome').trim().toUpperCase(),GrupoRef:grupoId,Ativo:get('cat-ativo')};
+  if(!reg.Nome){ alert('Preencha o nome da categoria.'); return; }
+  if(!grupoId){ alert('Selecione o grupo.'); return; }
+  const dup=(DB.categorias||[]).some(c=>c.ID!==reg.ID && nivelEh(c,'CATEGORIA')
+    && c.GrupoRef===grupoId && nomeEq(c.Nome,reg.Nome));
+  if(dup){ alert('Esse grupo já tem uma categoria com esse nome.'); return; }
   await salvarReg('Categorias',reg,'cat-save');
 }
 

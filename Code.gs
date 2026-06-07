@@ -28,7 +28,7 @@ var ABAS = {
   Recorrentes:    ['ID','Perfil','Tipo','Grupo','Descricao','Categoria','Conta','ValorPadrao','DiaVenc','VigenciaInicio','VigenciaFim','Ativo','EmFolha','SalarioRef'],
   Movimentos:     ['ID','Codigo','Perfil','Competencia','CompGasto','Data','Tipo','Grupo','Categoria','Conta','Descricao','Valor','Status','Origem','Ref'],
   Emprestimos:    ['ID','Perfil','Instituicao','Contrato','DataContratacao','ValorContratado','TxNominal','TxEfetiva','ValorParcela','QtdParcelas','ParcelasPagas','CompetenciaInicial','Tipo','SalarioRef'],
-  Categorias:     ['ID','Tipo','Nivel','Nome','Ativo'],
+  Categorias:     ['ID','Tipo','Nivel','Nome','GrupoRef','Ativo'],
   Config:         ['ID','Valor']
 };
 
@@ -59,27 +59,26 @@ function setup() {
 function semearCategorias_(ss) {
   var sh = ss.getSheetByName('Categorias');
   if (!sh || sh.getLastRow() > 1) return; // já tem dados
-  var seed = [
-    ['ENTRADA','GRUPO','SALÁRIO'],
-    ['ENTRADA','GRUPO','OUTRAS RENDAS'],
-    ['SAÍDA','GRUPO','CARRO'],
-    ['SAÍDA','GRUPO','APT PARNAMIRIM'],
-    ['SAÍDA','GRUPO','FLAT CARNEIROS'],
-    ['SAÍDA','GRUPO','APT JAQUEIRA'],
-    ['SAÍDA','GRUPO','CASA ALDEIA'],
-    ['SAÍDA','GRUPO','GASTOS PESSOAIS'],
-    ['SAÍDA','CATEGORIA','ALIMENTAÇÃO'],
-    ['SAÍDA','CATEGORIA','MORADIA'],
-    ['SAÍDA','CATEGORIA','TRANSPORTE'],
-    ['SAÍDA','CATEGORIA','SAÚDE'],
-    ['SAÍDA','CATEGORIA','GASTO PESSOAL'],
-    ['SAÍDA','CATEGORIA','OBRAS CASA DE ALDEIA'],
-    ['SAÍDA','CATEGORIA','SAQUE']
+  // Grupos primeiro (com IDs fixos), depois categorias vinculadas via GrupoRef.
+  // Colunas: ID, Tipo, Nivel, Nome, GrupoRef, Ativo
+  var linhas = [
+    ['CG-1', 'ENTRADA','GRUPO','SALÁRIO','','SIM'],
+    ['CG-2', 'ENTRADA','GRUPO','OUTRAS RENDAS','','SIM'],
+    ['CG-3', 'SAÍDA','GRUPO','CARRO','','SIM'],
+    ['CG-4', 'SAÍDA','GRUPO','APT PARNAMIRIM','','SIM'],
+    ['CG-5', 'SAÍDA','GRUPO','FLAT CARNEIROS','','SIM'],
+    ['CG-6', 'SAÍDA','GRUPO','APT JAQUEIRA','','SIM'],
+    ['CG-7', 'SAÍDA','GRUPO','CASA ALDEIA','','SIM'],
+    ['CG-8', 'SAÍDA','GRUPO','GASTOS PESSOAIS','','SIM'],
+    ['CG-9',  'SAÍDA','CATEGORIA','ALIMENTAÇÃO','CG-8','SIM'],
+    ['CG-10', 'SAÍDA','CATEGORIA','MORADIA','CG-4','SIM'],
+    ['CG-11', 'SAÍDA','CATEGORIA','TRANSPORTE','CG-3','SIM'],
+    ['CG-12', 'SAÍDA','CATEGORIA','SAÚDE','CG-8','SIM'],
+    ['CG-13', 'SAÍDA','CATEGORIA','GASTO PESSOAL','CG-8','SIM'],
+    ['CG-14', 'SAÍDA','CATEGORIA','OBRAS CASA DE ALDEIA','CG-7','SIM'],
+    ['CG-15', 'SAÍDA','CATEGORIA','SAQUE','CG-8','SIM']
   ];
-  var linhas = seed.map(function(r, i) {
-    return ['CG-' + (i + 1), r[0], r[1], r[2], 'SIM'];
-  });
-  sh.getRange(2, 1, linhas.length, 5).setValues(linhas);
+  sh.getRange(2, 1, linhas.length, 6).setValues(linhas);
 }
 
 // ===== ENTRADA HTTP =====
