@@ -2013,6 +2013,7 @@ function abrirAjusteFatura(){
      +fld('Valor (R$ — use negativo para abater)','<input id="aj-valor" inputmode="decimal" placeholder="ex.: 120,50 ou -50">')
      +fld('Grupo','<select id="aj-grupo">'+GRUPOS_SAIDA.map(g=>opt(g,'AJUSTE CARTÃO')).join('')+'</select>')
    +'</div>'
+   +'<label style="display:flex;gap:8px;align-items:flex-start;font-size:11.5px;color:#5B6B63;margin:2px 2px 4px"><input type="checkbox" id="aj-mig" style="margin-top:2px"><span><b>Migração</b> — o gasto já aconteceu antes; contar só no caixa (entra na fatura/banco neste mês, mas fica fora do regime de gasto). Marque ao trazer parcelamentos antigos.</span></label>'
    +'<div class="acoes"><button class="btn-ghost" onclick="fecharModal()">Cancelar</button><button class="btn green" id="aj-save" onclick="salvarAjusteFatura()">Adicionar ajuste</button></div>';
   abrirModal();
 }
@@ -2022,8 +2023,10 @@ async function salvarAjusteFatura(){
   const desc=document.getElementById('aj-desc').value.trim()||'Ajuste de fatura';
   const valor=parseValor(document.getElementById('aj-valor').value);
   const grupo=document.getElementById('aj-grupo').value;
+  const mig=!!(document.getElementById('aj-mig')&&document.getElementById('aj-mig').checked);
   if(!valor){ alert('Informe o valor (pode ser negativo).'); return; }
-  const reg={Perfil:perfilAtivo,Competencia:comp,CompGasto:comp,Data:'',Tipo:'SAÍDA',Grupo:grupo,Categoria:'AJUSTE',Conta:cardName,Descricao:desc,Valor:valor,Status:'PREVISTO',Origem:'AJUSTE',Ref:'FAT:'+cardName+':'+comp};
+  const descFinal = mig ? (desc==='Ajuste de fatura' ? 'Migração de fatura' : desc+' (migração)') : desc;
+  const reg={Perfil:perfilAtivo,Competencia:comp,CompGasto:mig?'':comp,Data:'',Tipo:'SAÍDA',Grupo:grupo,Categoria:'AJUSTE',Conta:cardName,Descricao:descFinal,Valor:valor,Status:'PREVISTO',Origem:'AJUSTE',Ref:'FAT:'+cardName+':'+comp};
   await salvarReg('Movimentos',reg,'aj-save');
 }
 
