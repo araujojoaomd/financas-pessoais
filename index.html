@@ -561,7 +561,7 @@ function demo(){
       {ID:'CT-3',Nome:'VISA Nubank Lívia',Perfil:'LÍVIA',DiaFechamento:3,DiaVencimento:10,Limite:8000,Ativo:'SIM'}
     ],
     compras:[
-      {ID:'CP-1',Codigo:'CMP-0001',Natureza:'COMPRA',Perfil:'JOÃO',Cartao:'VISA Bradesco João',DataCompra:'02/04/2026',Descricao:'Mundial Esquadrias (Renato)',Grupo:'CASA ALDEIA',Categoria:'OBRAS CASA DE ALDEIA',ValorParcela:2274.58,QtdParcelas:12,CompetenciaInicial:c,AlvoRef:'',Criado:''},
+      {ID:'CP-1',Codigo:'CMP-0001',Natureza:'COMPRA',Perfil:'JOÃO',Cartao:'VISA Bradesco João',DataCompra:'02/04/2026',Descricao:'Mundial Esquadrias (Renato)',Grupo:'CASA ALDEIA',Categoria:'OBRAS CASA DE ALDEIA',ValorParcela:2274.58,QtdParcelas:12,ParcelasPagas:3,CompetenciaInicial:c,AlvoRef:'',Criado:''},
       {ID:'CP-2',Codigo:'CMP-0002',Natureza:'COMPRA',Perfil:'LÍVIA',Cartao:'VISA Nubank Lívia',DataCompra:'05/04/2026',Descricao:'Ferreira Costa (Sofá cama Aldeia)',Grupo:'CASA ALDEIA',Categoria:'OBRAS CASA DE ALDEIA',ValorParcela:241.96,QtdParcelas:10,CompetenciaInicial:c,AlvoRef:'',Criado:''},
       {ID:'CP-3',Codigo:'CMP-0003',Natureza:'COMPRA',Perfil:'LÍVIA',Cartao:'VISA Nubank Lívia',DataCompra:'10/04/2026',Descricao:'Farmácia + mercado',Grupo:'GASTOS PESSOAIS',Categoria:'GASTO PESSOAL',ValorParcela:680.00,QtdParcelas:1,CompetenciaInicial:c,AlvoRef:'',Criado:''},
       {ID:'CP-4',Codigo:'CMP-0004',Natureza:'COMPRA',Perfil:'JOÃO',Cartao:'VISA BB João',DataCompra:'12/03/2026',Descricao:'Notebook',Grupo:'GASTOS PESSOAIS',Categoria:'GASTO PESSOAL',ValorParcela:583.00,QtdParcelas:6,CompetenciaInicial:compAdd(c,-1),AlvoRef:'',Criado:''},
@@ -752,9 +752,10 @@ function eventos(){
   // Compras de cartão -> N parcelas. COMPRA conta no gasto; PAGAMENTO/PIX_PROPRIO só no caixa.
   DB.compras.forEach(c=>{
     const qtd=Math.max(1,parseInt(c.QtdParcelas)||1);
+    const jaPagas=Math.min(qtd,Math.max(0,parseInt(c.ParcelasPagas)||0));
     const valor=parseValor(c.ValorParcela);
     const caixaBase=c.CompetenciaInicial || compDeData(c.DataCompra);
-    for(let k=0;k<qtd;k++){
+    for(let k=jaPagas;k<qtd;k++){
       evs.push({tipo:'SAÍDA',grupo:c.Grupo||'OUTROS',categoria:c.Categoria||'',perfil:c.Perfil||'JOÃO',conta:c.Cartao||'',
         descricao:(c.Descricao||'')+(qtd>1?' ('+(k+1)+'/'+qtd+')':''),valor,status:'PREVISTO',origem:'CARTÃO',
         ref:'CAR:'+c.ID+':'+k, compGasto:gastoParcela(c,k), compCaixa:compAdd(caixaBase,k), fonte:true, movId:null});
@@ -1163,7 +1164,9 @@ function renderCompras(){
   let h='<table><thead><tr><th>Código</th><th>Tipo</th><th>Cartão</th><th>Data</th><th>Descrição</th><th>Pessoa</th><th>Parcelas</th><th class="num">Valor parcela</th><th class="num">Total</th><th>1º venc.</th><th></th></tr></thead><tbody>';
   lista.forEach(c=>{
     const qtd=parseInt(c.QtdParcelas)||1, vp=parseValor(c.ValorParcela);
-    h+='<tr><td class="mono" style="font-size:11px;color:#2E5FA3;font-weight:600">'+esc(c.Codigo||'—')+'</td><td style="font-size:11.5px">'+(NAT_LABEL[(c.Natureza||'COMPRA').toUpperCase()]||'Compra')+'</td><td>'+esc(c.Cartao)+'</td><td class="mono">'+esc(c.DataCompra)+'</td><td>'+esc(c.Descricao)+'</td><td>'+pill(c.Perfil)+'</td><td class="mono">'+qtd+'x</td><td class="num">'+brl(vp)+'</td><td class="num">'+brl(vp*qtd)+'</td><td class="mono">'+esc(c.CompetenciaInicial)+'</td>'
+    const pg=Math.min(qtd,Math.max(0,parseInt(c.ParcelasPagas)||0));
+    const colParc=qtd+'x'+(pg>0?' <span style="color:#5B6B63">('+pg+' pagas)</span>':'');
+    h+='<tr><td class="mono" style="font-size:11px;color:#2E5FA3;font-weight:600">'+esc(c.Codigo||'—')+'</td><td style="font-size:11.5px">'+(NAT_LABEL[(c.Natureza||'COMPRA').toUpperCase()]||'Compra')+'</td><td>'+esc(c.Cartao)+'</td><td class="mono">'+esc(c.DataCompra)+'</td><td>'+esc(c.Descricao)+'</td><td>'+pill(c.Perfil)+'</td><td class="mono">'+colParc+'</td><td class="num">'+brl(vp)+'</td><td class="num">'+brl(vp*qtd)+'</td><td class="mono">'+esc(c.CompetenciaInicial)+'</td>'
      +'<td><button class="btn-ic" onclick=\'abrirLancCartao('+JSON.stringify(c.ID)+')\'>✏️</button><button class="btn-ic" onclick=\'excluirReg("Compras_Cartao",'+JSON.stringify(c.ID)+')\'>🗑️</button></td></tr>';
   });
   document.getElementById('comprasTbl').innerHTML=h+'</tbody></table>';
@@ -1200,6 +1203,7 @@ function abrirLancCartao(id){
      +fld('<span id="lc-lblvalor">Valor da parcela (R$)</span>','<input id="lc-valor" inputmode="decimal" value="'+(c?String(parseValor(c.ValorParcela)).replace('.',','):'')+'" oninput="previewLanc()">')
      +fld('Qtd de parcelas','<input id="lc-qtd" type="number" min="1" value="'+(c?parseInt(c.QtdParcelas)||1:1)+'" oninput="previewLanc()">')
    +'</div>'
+   +'<div class="grid full">'+fld('Parcelas já pagas (migração)','<input id="lc-pagas" type="number" min="0" value="'+(c?parseInt(c.ParcelasPagas)||0:0)+'" oninput="previewLanc()"><div style="font-size:10.5px;color:#5B6B63;margin-top:3px">Só para trazer parcelamento em andamento: nº de parcelas já cobradas. O app gera só as que faltam, com a posição real (ex.: 6/8). Deixe 0 em compra nova.</div>')+'</div>'
    +'<div class="grid full">'+fld('Vencimento da 1ª parcela','<input id="lc-comp" oninput="this.dataset.touched=1;previewLanc()" value="'+(c?esc(c.CompetenciaInicial):'')+'"'+(c?' data-touched="1"':'')+'><div id="lc-hint" style="font-size:10.5px;color:#5B6B63;margin-top:3px"></div>')+'</div>'
    +'<div class="preview" id="lc-preview"></div>'
    +'<div class="acoes"><button class="btn-ghost" onclick="fecharModal()">Cancelar</button><button class="btn green" id="lc-save" onclick="salvarLancCartao()">Salvar lançamento</button></div>';
@@ -1231,6 +1235,8 @@ function previewLanc(){
   const tipoEf=lcTipoEfetivo();
   const valor=parseValor(document.getElementById('lc-valor').value);
   const qtd=Math.max(1,parseInt(document.getElementById('lc-qtd').value)||1);
+  const pagasEl=document.getElementById('lc-pagas');
+  const pagas=Math.min(qtd,Math.max(0,(pagasEl?parseInt(pagasEl.value):0)||0));
   const comp=document.getElementById('lc-comp').value.trim();
   const el=document.getElementById('lc-preview');
   if(!valor || !/^\d{4}-\d{2}$/.test(comp)){ el.innerHTML='<div class="ph">Pré-visualização</div><div style="color:#5B6B63">Preencha valor e vencimento (AAAA-MM).</div>'; return; }
@@ -1239,8 +1245,8 @@ function previewLanc(){
     const liq=parseValor(document.getElementById('lc-pixliquido').value);
     h+='<div class="ph">Resultado da operação</div>';
     if(liq) h+='<div class="pr" style="color:#16A34A"><span>▲ Entra na conta agora</span><span>'+brl(liq)+'</span></div>';
-  } else { h+='<div class="ph">'+qtd+' parcela(s) no cartão • total '+brl(valor*qtd)+'</div>'; }
-  for(let k=0;k<qtd;k++){ h+='<div class="pr" style="color:#DC2626"><span>▼ '+(k+1)+'/'+qtd+' — vence '+compLabel(compAdd(comp,k))+'</span><span>'+brl(valor)+'</span></div>'; }
+  } else { const rest=Math.max(0,qtd-pagas); h+='<div class="ph">'+rest+' parcela(s) a vencer • total restante '+brl(valor*rest)+(pagas>0?' • '+pagas+' já paga(s) (migração)':'')+'</div>'; }
+  for(let k=pagas;k<qtd;k++){ h+='<div class="pr" style="color:#DC2626"><span>▼ '+(k+1)+'/'+qtd+' — vence '+compLabel(compAdd(comp,k))+'</span><span>'+brl(valor)+'</span></div>'; }
   if(tipoEf==='PIX_PROPRIO'){ const liq=parseValor(document.getElementById('lc-pixliquido').value); const custo=valor*qtd-liq; if(custo>0) h+='<div class="pr" style="border-top:1px solid #DCE4E0;margin-top:4px;padding-top:4px"><span>Custo (juros/IOF) — embutido</span><span>'+brl(custo)+'</span></div>'; }
   el.innerHTML=h;
 }
@@ -1251,6 +1257,8 @@ async function salvarLancCartao(){
   const data=deDate(document.getElementById('lc-data').value);
   const desc=document.getElementById('lc-desc').value.trim();
   const qtd=Math.max(1,parseInt(document.getElementById('lc-qtd').value)||1);
+  const pagasEl=document.getElementById('lc-pagas');
+  const pagas=Math.min(qtd,Math.max(0,(pagasEl?parseInt(pagasEl.value):0)||0));
   const comp=document.getElementById('lc-comp').value.trim();
   const valor=parseValor(document.getElementById('lc-valor').value);
   if(!cartao){ alert('Selecione o cartão.'); return; }
@@ -1262,7 +1270,7 @@ async function salvarLancCartao(){
 
   // EDIÇÃO: só ajusta os campos centrais da compra
   if(id){
-    const r=await chamar({acao:'editar',aba:'Compras_Cartao',registro:{ID:id,Cartao:cartao,DataCompra:data,Descricao:desc,Grupo:document.getElementById('lc-grupo').value,Categoria:document.getElementById('lc-cat').value,ValorParcela:valor,QtdParcelas:qtd,CompetenciaInicial:comp}});
+    const r=await chamar({acao:'editar',aba:'Compras_Cartao',registro:{ID:id,Cartao:cartao,DataCompra:data,Descricao:desc,Grupo:document.getElementById('lc-grupo').value,Categoria:document.getElementById('lc-cat').value,ValorParcela:valor,QtdParcelas:qtd,ParcelasPagas:pagas,CompetenciaInicial:comp}});
     if(r.ok){ toast('Lançamento atualizado'); fecharModal(); await carregar(); } else { btn.disabled=false; btn.textContent='Salvar lançamento'; toast('Erro: '+(r.erro||'falha'),true); }
     return;
   }
@@ -1273,7 +1281,7 @@ async function salvarLancCartao(){
   else { natureza='COMPRA'; grupo=document.getElementById('lc-grupo').value; categoria=document.getElementById('lc-cat').value; prefixo='CMP'; }
 
   // 1) cria a dívida no cartão
-  const rc=await chamar({acao:'salvar',aba:'Compras_Cartao',registro:{Codigo:proximoCodigo(prefixo),Perfil:perfilAtivo,Natureza:natureza,Cartao:cartao,DataCompra:data,Descricao:desc,Grupo:grupo,Categoria:categoria,ValorParcela:valor,QtdParcelas:qtd,CompetenciaInicial:comp,AlvoRef:'',Criado:hoje}});
+  const rc=await chamar({acao:'salvar',aba:'Compras_Cartao',registro:{Codigo:proximoCodigo(prefixo),Perfil:perfilAtivo,Natureza:natureza,Cartao:cartao,DataCompra:data,Descricao:desc,Grupo:grupo,Categoria:categoria,ValorParcela:valor,QtdParcelas:qtd,ParcelasPagas:pagas,CompetenciaInicial:comp,AlvoRef:'',Criado:hoje}});
   if(!rc.ok){ btn.disabled=false; btn.textContent='Salvar lançamento'; toast('Erro: '+(rc.erro||'falha'),true); return; }
 
   // 2) PIX pra mim: entrada líquida na conta
@@ -1866,7 +1874,7 @@ async function salvarCartao(){
 // Saldo devedor = todas as parcelas + ajustes − pagamentos de fatura. Disponível = limite − devedor.
 function limiteUsado(card){
   const nome=card.Nome; let u=0;
-  DB.compras.filter(c=>c.Cartao===nome).forEach(c=>{ u += parseValor(c.ValorParcela)*Math.max(1,parseInt(c.QtdParcelas)||1); });
+  DB.compras.filter(c=>c.Cartao===nome).forEach(c=>{ const q=Math.max(1,parseInt(c.QtdParcelas)||1); const jp=Math.min(q,Math.max(0,parseInt(c.ParcelasPagas)||0)); u += parseValor(c.ValorParcela)*Math.max(0,q-jp); });
   DB.movimentos.forEach(m=>{ const ref=String(m.Ref||'');
     if(ref.indexOf('FAT:'+nome+':')===0) u += parseValor(m.Valor);        // ajuste aumenta a dívida
     else if(ref.indexOf('FATPG:'+nome+':')===0) u -= parseValor(m.Valor); // pagamento de fatura abate
@@ -1879,8 +1887,9 @@ function faturaParcelas(cardName, comp){
   const out=[];
   DB.compras.filter(c=>c.Cartao===cardName).forEach(c=>{
     const qtd=Math.max(1,parseInt(c.QtdParcelas)||1), vp=parseValor(c.ValorParcela);
+    const jaPagas=Math.min(qtd,Math.max(0,parseInt(c.ParcelasPagas)||0));
     const ini=c.CompetenciaInicial||compDeData(c.DataCompra);
-    for(let k=0;k<qtd;k++){
+    for(let k=jaPagas;k<qtd;k++){
       if(compAdd(ini,k)===comp) out.push({compra:c,k,valor:vp,descricao:(c.Descricao||'')+(qtd>1?' ('+(k+1)+'/'+qtd+')':''),grupo:c.Grupo||'',dataCompra:c.DataCompra});
     }
   });
