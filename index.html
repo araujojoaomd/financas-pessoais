@@ -475,11 +475,21 @@ function recarregarCatSelect(grupoSelId, catSelId){
   if(!gs||!cs) return;
   cs.innerHTML=optsCat(gs.value, '');
 }
+// Grupos de SAÍDA oferecidos nos formulários do usuário: só os CADASTRADOS no banco.
+// Os grupos de sistema (SYS_GRUPOS_SAIDA: cartão, empréstimo, ajuste) NÃO entram aqui —
+// são usados internamente, não se escolhe à mão num pagamento/compra.
+function gruposSaidaUsuario(grupoSel){
+  let lista=gruposCad('SAÍDA').map(g=>String(g.Nome).trim()).filter(Boolean);
+  if(!lista.length) lista=DEF_GRUPOS_SAIDA.filter(g=>SYS_GRUPOS_SAIDA.indexOf(g)<0);
+  if(grupoSel && lista.indexOf(grupoSel)<0) lista=[grupoSel].concat(lista); // preserva valor ao editar
+  return uniq(lista);
+}
 // Par de campos Grupo + Categoria (despesa), com filtro encadeado.
 function camposGrupoCat(prefix, grupoSel, catSel){
   const gid=prefix+'-grupo', cid=prefix+'-cat';
-  const gAtual = grupoSel || GRUPOS_SAIDA[0] || '';
-  return fld('Grupo','<select id="'+gid+'" onchange="recarregarCatSelect(\''+gid+'\',\''+cid+'\')">'+GRUPOS_SAIDA.map(g=>opt(g,gAtual)).join('')+'</select>')
+  const lista=gruposSaidaUsuario(grupoSel);
+  const gAtual = grupoSel || lista[0] || '';
+  return fld('Grupo','<select id="'+gid+'" onchange="recarregarCatSelect(\''+gid+'\',\''+cid+'\')">'+lista.map(g=>opt(g,gAtual)).join('')+'</select>')
        + fld('Categoria','<select id="'+cid+'">'+optsCat(gAtual,catSel)+'</select>');
 }
 const TIPOS_EMPRESTIMO = ['Consignado','Financiamento Imobiliário','Veículo','Empréstimo Pessoal','Outros'];
