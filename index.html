@@ -2159,11 +2159,6 @@ function renderPreviewImport(p){
     p.parcelamentos.forEach(x=>{ h+='<tr><td>'+esc(x.descricao)+'</td><td class="mono">'+x.xx+'/'+x.yy+'</td><td class="num">'+brl(x.valor)+'</td></tr>'; });
     h+='</tbody></table></div>';
   } else { h+='<div class="vazio" style="margin-top:8px">Nenhum parcelamento reconhecido. Pode ser leiaute diferente — me avise.</div>'; }
-  // dump pra conferência (copiar e colar)
-  const dump='TOTAL\t'+(p.total!=null?p.total:'')+'\tVENC\t'+(p.vencimento||'')+'\n'
-    + p.parcelamentos.map(x=>x.descricao+'\t'+x.xx+'/'+x.yy+'\t'+String(x.valor).replace('.',',')).join('\n');
-  h+='<div style="margin-top:8px"><div style="font-size:11px;color:#5B6B63;margin-bottom:4px">Leitura completa (selecione tudo e copie pra me mandar):</div>'
-    +'<textarea readonly onclick="this.select()" style="width:100%;height:120px;font-family:monospace;font-size:11px;border:1px solid #DCE4E0;border-radius:8px;padding:8px">'+esc(dump)+'</textarea></div>';
   h+='<p style="font-size:11px;color:#5B6B63;margin-top:8px"><b>Fase 1 (conferência):</b> confira se os parcelamentos e o total batem com a fatura. Estando certo, eu ligo o lançamento automático (cria os parcelamentos novos + a fatura a pagar, sem duplicar o que já existe).</p>';
   el.innerHTML=h;
 }
