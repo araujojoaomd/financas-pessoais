@@ -911,7 +911,7 @@ function toggleGrupoMes(n){ mesGruposAbertos[n] = (mesGruposAbertos[n]===false);
 function grupoOrigemSaida(o){
   o=String(o||'').toUpperCase().replace('-','_');
   if(o==='RECORRENTE') return 'Recorrentes';
-  if(o==='EMPRÉSTIMO'||o==='EMPRESTIMO') return 'Empréstimos';
+  if(o==='EMPRÉSTIMO'||o==='EMPRESTIMO'||o==='CONSIGNADO') return 'Empréstimos';
   if(o==='CARTÃO'||o==='CARTAO'||o==='AJUSTE'||o==='PAGAMENTO'||o==='PIX_CARTÃO'||o==='PIX_CARTAO') return 'Cartão';
   return 'Pagamentos/Compras';
 }
