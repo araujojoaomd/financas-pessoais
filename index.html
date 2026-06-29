@@ -951,7 +951,7 @@ function caixaMes(nome, itens, cor){
   const total=itens.reduce((s,l)=>s+l.valor,0);
   const feitos=itens.filter(l=>(l.status||'PREVISTO').toUpperCase()!=='PREVISTO').length;
   const aberto = mesGruposAbertos[nome]!==false;
-  let h='<div class="grp-box"><div class="grp-head" onclick="toggleGrupoMes('+JSON.stringify(nome)+')">'
+  let h='<div class="grp-box"><div class="grp-head" onclick=\'toggleGrupoMes('+JSON.stringify(nome)+')\'>'
     +'<span class="grp-chev">'+(aberto?'▾':'▸')+'</span><span class="grp-nome">'+esc(nome)+'</span>'
     +'<span class="grp-cont">'+feitos+'/'+itens.length+'</span>'
     +'<span class="grp-tot" style="color:'+cor+'">'+brl(total)+'</span></div>';
@@ -988,7 +988,7 @@ function linhaSalario(l){
   const acao = st!=='PREVISTO'
     ? '<button class="btn-ic" onclick=\'desfazerItem('+l._i+')\' title="Desfazer">↩︎</button>'
     : '<button class="btn-ic" style="background:#16A34A;color:#fff;border-color:#16A34A" onclick="abrirReceberSalario('+l._i+')" title="Receber o líquido">Receber líq.</button>';
-  let h='<tr style="cursor:pointer" onclick="toggleSalario('+JSON.stringify(rid)+')" title="Clique para ver bruto, descontos e ajustar">'
+  let h='<tr style="cursor:pointer" onclick=\'toggleSalario('+JSON.stringify(rid)+')\' title="Clique para ver bruto, descontos e ajustar">'
     +'<td><span style="color:#16A34A">'+(ab?'▾':'▸')+'</span> '+esc(l.descricao)
       +'<div style="font-size:11px;color:#5B6B63;margin-top:2px">bruto '+brl(l._bruto)+' · −'+brl(l._consig)+' descontos ('+l._pct.toFixed(1).replace('.',',')+'%) · <span style="color:#2E5FA3;text-decoration:underline">'+(ab?'ocultar':'ver / ajustar')+'</span></div></td>'
     +'<td>SALÁRIO</td><td>'+pill(l.perfil)+'</td>'
