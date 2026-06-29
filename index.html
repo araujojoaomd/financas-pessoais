@@ -2114,7 +2114,7 @@ function parseFaturaBradesco(linhas){
   let total=null, venc=null;
   const mTot=txt.match(/Total da fatura em real\s*([\d.]+,\d{2})/i) || txt.match(/Total de fatura\s*R?\$?\s*([\d.]+,\d{2})/i);
   if(mTot) total=parseValor(mTot[1]);
-  const mVenc=txt.match(/Vencimento[\s\S]{0,40}?(\d{2}\/\d{2}\/\d{4})/i) || txt.match(/(\d{2}\/\d{2}\/\d{4})/);
+  const mVenc=txt.match(/Vencimento\s*(\d{2}\/\d{2}\/\d{4})/i);
   if(mVenc) venc=mVenc[1];
   let faturaComp=null;
   if(venc){ const pp=venc.split('/'); faturaComp=pp[2]+'-'+pp[1]; }
@@ -2176,7 +2176,7 @@ function renderPreviewImport(p){
     + p.parcelamentos.map(x=>x.descricao+'\t'+x.xx+'/'+x.yy+'\t'+String(x.valor).replace('.',',')).join('\n');
   h+='<div style="margin-top:8px"><div style="font-size:11px;color:#5B6B63;margin-bottom:4px">Leitura completa (selecione tudo e copie pra me mandar):</div>'
     +'<textarea readonly onclick="this.select()" style="width:100%;height:120px;font-family:monospace;font-size:11px;border:1px solid #DCE4E0;border-radius:8px;padding:8px">'+esc(dump)+'</textarea></div>';
-  h+='<p style="font-size:11px;color:#5B6B63;margin-top:8px"><b>Fase 1 (conferência) · leitor v2.1:</b> confira se os parcelamentos e o total batem com a fatura. Estando certo, eu ligo o lançamento automático (cria os parcelamentos novos + a fatura a pagar, sem duplicar o que já existe).</p>';
+  h+='<p style="font-size:11px;color:#5B6B63;margin-top:8px"><b>Fase 1 (conferência):</b> confira se os parcelamentos e o total batem com a fatura. Estando certo, eu ligo o lançamento automático (cria os parcelamentos novos + a fatura a pagar, sem duplicar o que já existe).</p>';
   el.innerHTML=h;
 }
 function abrirAjusteFatura(){
