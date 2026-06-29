@@ -746,15 +746,27 @@ function descontosSalario(salId, comp){
     if(!ehConsignado(e) || e.SalarioRef!==salId) return;
     const qtd=Math.max(1,parseInt(e.QtdParcelas)||1); const ini=e.CompetenciaInicial; if(!ini) return;
     const jaPagas=Math.max(0,parseInt(e.ParcelasPagas)||0);
-    for(let k=jaPagas;k<qtd;k++){ if(compAdd(ini,k)===comp){ const v=parseValor(e.ValorParcela); total+=v; rows.push({descricao:'Consignado '+(e.Instituicao||''), valor:v}); break; } }
+    for(let k=jaPagas;k<qtd;k++){ if(compAdd(ini,k)===comp){
+      const refK='FOLHA:'+e.ID+':'+comp, aj=ajusteMes(refK);
+      const v=aj? aj.valor : parseValor(e.ValorParcela);
+      total+=v; rows.push({descricao:'Consignado '+(e.Instituicao||''), valor:v, ref:refK, ajustado:!!aj}); break; } }
   });
   DB.recorrentes.forEach(r=>{
     if(String(r.EmFolha||'').toUpperCase()!=='SIM' || r.SalarioRef!==salId) return;
     if(String(r.Ativo).toUpperCase()==='NÃO'||String(r.Ativo).toUpperCase()==='NAO') return;
     const vi=r.VigenciaInicio||'0000-00', vf=r.VigenciaFim||'9999-99';
-    if(comp>=vi && comp<=vf){ const v=parseValor(r.ValorPadrao); total+=v; rows.push({descricao:(r.Descricao||'')+' (folha)', valor:v}); }
+    if(comp>=vi && comp<=vf){
+      const refK='FOLHA:'+r.ID+':'+comp, aj=ajusteMes(refK);
+      const v=aj? aj.valor : parseValor(r.ValorPadrao);
+      total+=v; rows.push({descricao:(r.Descricao||'')+' (folha)', valor:v, ref:refK, ajustado:!!aj}); }
   });
   return {total, rows};
+}
+// Ajuste de valor de um item para um mês específico (não altera o cadastro; meses futuros seguem o padrão).
+// Guardado como Movimento com Origem AJUSTE_MES e Ref = chave do item + competência.
+function ajusteMes(refKey){
+  const m=(DB.movimentos||[]).find(x=>String(x.Origem||'').toUpperCase()==='AJUSTE_MES' && String(x.Ref||'')===refKey);
+  return m? {valor:parseValor(m.Valor), movId:m.ID} : null;
 }
 function eventos(){
   const evs=[];
@@ -797,16 +809,19 @@ function eventos(){
     let c = vi>ji? vi: ji;
     while(c<=jf && c<=vf){
       if(ehSalario){
-        const bruto=parseValor(r.ValorPadrao);
+        const refB='BRUTO:'+r.ID+':'+c, ajB=ajusteMes(refB);
+        const bruto=ajB? ajB.valor : parseValor(r.ValorPadrao);
         const d=descontosSalario(r.ID, c);
         evs.push({tipo:'ENTRADA',grupo:'SALÁRIO',categoria:'',perfil:r.Perfil||'JOÃO',conta:r.Conta||'',
           descricao:r.Descricao||'',valor:bruto-d.total,status:'PREVISTO',origem:'RECORRENTE',
-          recId:r.ID, _bruto:bruto, _consig:d.total, _pct:(bruto>0?d.total/bruto*100:0), _descRows:d.rows,
+          recId:r.ID, _bruto:bruto, _brutoRef:refB, _brutoAj:!!ajB, _consig:d.total, _pct:(bruto>0?d.total/bruto*100:0), _descRows:d.rows,
           ref:'REC:'+r.ID+':'+c, compGasto:c, compCaixa:c, fonte:true, movId:null});
       } else {
+        const refV='RECV:'+r.ID+':'+c, ajV=ajusteMes(refV);
+        const val=ajV? ajV.valor : parseValor(r.ValorPadrao);
         evs.push({tipo:r.Tipo||'SAÍDA',grupo:r.Grupo||'OUTROS',categoria:r.Categoria||'',perfil:r.Perfil||'JOÃO',conta:r.Conta||'',
-          descricao:r.Descricao||'',valor:parseValor(r.ValorPadrao),status:'PREVISTO',origem:'RECORRENTE',
-          recId:r.ID, ref:'REC:'+r.ID+':'+c, compGasto:c, compCaixa:c, fonte:true, movId:null});
+          descricao:r.Descricao||'',valor:val,status:'PREVISTO',origem:'RECORRENTE',
+          recId:r.ID, _ajRef:refV, _ajustado:!!ajV, ref:'REC:'+r.ID+':'+c, compGasto:c, compCaixa:c, fonte:true, movId:null});
       }
       c=compAdd(c,1);
     }
@@ -814,6 +829,7 @@ function eventos(){
   // Movimentos (baixas, avulsos, ajustes, entradas PIX, marcadores PAGO_CARTAO).
   // compCaixa = m.Competencia (vazio = fora do caixa); compGasto = m.CompGasto (vazio = fora do gasto).
   DB.movimentos.forEach(m=>{
+    if(String(m.Origem||'').toUpperCase()==='AJUSTE_MES') return; // só ajusta valor de outro item; não é lançamento próprio
     evs.push({tipo:m.Tipo||'SAÍDA',grupo:m.Grupo||'OUTROS',categoria:m.Categoria||'',perfil:m.Perfil||'JOÃO',conta:m.Conta||'',
       descricao:m.Descricao||'',valor:parseValor(m.Valor),status:m.Status||'PAGO',origem:m.Origem||'MANUAL',
       ref:m.Ref||'', compGasto:(m.CompGasto||''), compCaixa:(m.Competencia||''), fonte:false, movId:m.ID});
@@ -923,7 +939,11 @@ function linhaMes(l,i){
   if(l.origem==='CONSIGNADO'){ statusCell='<span class="pill p-comum">em folha</span>'; acaoCell='<span style="font-size:11px;color:#5B6B63">automático</span>'; }
   else if(st==='PAGO'){ statusCell='<span class="pill p-pago">'+(l.tipo==='ENTRADA'?'RECEBIDO':'PAGO')+'</span>'; acaoCell='<span style="font-size:11px;color:#5B6B63">'+esc(l.conta||'—')+'</span> <button class="btn-ic" onclick=\'desfazerItem('+i+')\' title="Desfazer">↩︎</button>'; }
   else if(st==='PAGO_CARTAO'){ statusCell='<span class="pill p-comum">pago c/ cartão</span>'; acaoCell='<button class="btn-ic" onclick=\'desfazerItem('+i+')\' title="Desfazer">↩︎</button>'; }
-  else { statusCell='<span class="pill p-prev">PREVISTO</span>'; acaoCell='<button class="btn-ic" style="background:#16A34A;color:#fff;border-color:#16A34A" onclick="abrirPagarDespesa('+i+')">'+(l.tipo==='ENTRADA'?'Receber':'Pagar')+'</button>'; }
+  else {
+    statusCell='<span class="pill p-prev">PREVISTO</span>'+(l._ajustado?' <span style="color:#C026D3;font-size:10px">• ajustado</span>':'');
+    const ajBtn = l._ajRef? '<button class="btn-ic" title="Ajustar o valor só deste mês" onclick=\'abrirAjusteMes('+JSON.stringify(l._ajRef)+','+JSON.stringify(l.descricao||'')+','+l.valor+')\'>✏️</button> ':'';
+    acaoCell=ajBtn+'<button class="btn-ic" style="background:#16A34A;color:#fff;border-color:#16A34A" onclick="abrirPagarDespesa('+i+')">'+(l.tipo==='ENTRADA'?'Receber':'Pagar')+'</button>';
+  }
   return '<tr><td>'+esc(l.descricao)+'</td><td>'+esc(l.grupo)+'</td><td>'+pill(l.perfil)+'</td><td class="num">'+brl(l.valor)+'</td><td>'+statusCell+'</td><td>'+acaoCell+'</td></tr>';
 }
 function caixaMes(nome, itens, cor){
@@ -975,15 +995,48 @@ function linhaSalario(l){
     +'<td class="num" style="font-weight:700;color:#16A34A">'+brl(l.valor)+'<div style="font-size:10px;color:#5B6B63;font-weight:400">líquido</div></td>'
     +'<td>'+stCell+'</td><td onclick="event.stopPropagation()">'+acao+'</td></tr>';
   if(ab){
-    h+='<tr style="background:#FAFCFB"><td style="padding-left:26px;color:#16A34A;font-size:12px;font-weight:600">Salário bruto</td><td></td><td></td><td class="num" style="color:#16A34A">'+brl(l._bruto)+'</td><td></td><td></td></tr>';
+    const btnAj=(ref,label,val,titulo)=>'<button class="btn-ic" title="'+titulo+'" onclick=\'event.stopPropagation();abrirAjusteMes('+JSON.stringify(ref)+','+JSON.stringify(label)+','+val+')\'>✏️</button>';
+    h+='<tr style="background:#FAFCFB"><td style="padding-left:26px;color:#16A34A;font-size:12px;font-weight:600">Salário bruto'+(l._brutoAj?' <span style="color:#C026D3">• ajustado</span>':'')+'</td><td></td><td></td><td class="num" style="color:#16A34A">'+brl(l._bruto)+'</td><td></td><td onclick="event.stopPropagation()">'+(l._brutoRef?btnAj(l._brutoRef,'Salário bruto — '+(l.descricao||''),l._bruto,'Ajustar o bruto deste mês'):'')+'</td></tr>';
     (l._descRows||[]).forEach(d=>{
-      h+='<tr style="background:#FAFCFB"><td style="padding-left:26px;color:#5B6B63;font-size:12px">• '+esc(d.descricao)+'</td><td></td><td></td><td class="num" style="color:#DC2626">−'+brl(d.valor)+'</td><td></td><td></td></tr>';
+      h+='<tr style="background:#FAFCFB"><td style="padding-left:26px;color:#5B6B63;font-size:12px">• '+esc(d.descricao)+(d.ajustado?' <span style="color:#C026D3">• ajustado</span>':'')+'</td><td></td><td></td><td class="num" style="color:#DC2626">−'+brl(d.valor)+'</td><td></td><td onclick="event.stopPropagation()">'+(d.ref?btnAj(d.ref,d.descricao||'Desconto',d.valor,'Ajustar este desconto neste mês'):'')+'</td></tr>';
     });
     h+='<tr style="background:#FAFCFB"><td style="padding-left:26px;font-size:12px;font-weight:700">Líquido</td><td></td><td></td><td class="num" style="font-weight:700;color:#16A34A">'+brl(l.valor)+'</td><td></td><td></td></tr>';
   }
   return h;
 }
 function abrirReceberSalario(i){ const l=window._mesItens[i]; if(!l) return; abrirPagar({modo:'despesa', titulo:'Receber salário líquido — '+l.descricao, valorPadrao:l.valor, ctx:{l}}); }
+// ----- Ajuste de valor só deste mês -----
+function abrirAjusteMes(refKey, label, atual){
+  const aj=ajusteMes(refKey);
+  document.getElementById('modalT').textContent='Ajustar valor — só deste mês';
+  document.getElementById('modalC').innerHTML=
+     '<input type="hidden" id="ajm-ref" value="'+esc(refKey)+'">'
+    +'<p style="font-size:12px;color:#5B6B63;margin:0 2px 12px"><b>'+esc(label)+'</b><br>O novo valor vale <b>só para este mês</b>. Os próximos meses seguem o valor cadastrado.</p>'
+    +'<div class="grid full">'+fld('Valor neste mês (R$)','<input id="ajm-valor" inputmode="decimal" value="'+(aj?String(aj.valor).replace('.',','):String(parseValor(atual)).replace('.',','))+'" oninput="this.value=this.value">')+'</div>'
+    +'<div class="acoes">'
+      +(aj?'<button class="btn-ghost" style="color:#DC2626" onclick="removerAjusteMes()">Remover ajuste</button>':'<button class="btn-ghost" onclick="fecharModal()">Cancelar</button>')
+      +'<button class="btn green" id="ajm-save" onclick="salvarAjusteMes()">Salvar</button></div>';
+  abrirModal();
+}
+async function salvarAjusteMes(){
+  const ref=document.getElementById('ajm-ref').value;
+  const valor=parseValor(document.getElementById('ajm-valor').value);
+  if(isNaN(valor)){ alert('Informe o valor.'); return; }
+  const aj=ajusteMes(ref);
+  const btn=document.getElementById('ajm-save'); if(btn){ btn.disabled=true; btn.textContent='Salvando...'; }
+  const reg={Origem:'AJUSTE_MES',Ref:ref,Valor:valor,Perfil:perfilAtivo,Descricao:'Ajuste de valor do mês',Tipo:'',Competencia:'',CompGasto:'',Data:'',Status:'PREVISTO'};
+  let r;
+  if(aj){ reg.ID=aj.movId; r=await chamar({acao:'editar',aba:'Movimentos',registro:reg}); }
+  else { r=await chamar({acao:'salvar',aba:'Movimentos',registro:reg}); }
+  if(r.ok){ toast('Valor ajustado para este mês'); fecharModal(); await carregar(); }
+  else { if(btn){ btn.disabled=false; btn.textContent='Salvar'; } toast('Erro: '+(r.erro||'falha'),true); }
+}
+async function removerAjusteMes(){
+  const ref=document.getElementById('ajm-ref').value;
+  const aj=ajusteMes(ref); if(!aj){ fecharModal(); return; }
+  const r=await chamar({acao:'excluir',aba:'Movimentos',id:aj.movId});
+  if(r.ok){ toast('Ajuste removido — voltou ao valor cadastrado'); fecharModal(); await carregar(); } else toast('Erro: '+(r.erro||'falha'),true);
+}
 function caixaMesFaturas(faturas, comp){
   if(!faturas.length) return '';
   const total=faturas.reduce((s,f)=>s+f.total,0), falta=faturas.reduce((s,f)=>s+Math.max(0,f.falta),0);
@@ -1435,7 +1488,7 @@ function marcadorOrigem(m){
 }
 function renderMovimentos(){
   const fc = (document.getElementById('fMovComp').value||'').trim();
-  let lista = DB.movimentos.filter(m=>passaPerfil(m.Perfil));
+  let lista = DB.movimentos.filter(m=>passaPerfil(m.Perfil) && String(m.Origem||'').toUpperCase()!=='AJUSTE_MES');
   if(fc) lista = lista.filter(m=>String(m.Competencia).indexOf(fc)>=0);
   if(!lista.length){ document.getElementById('movTbl').innerHTML='<div class="vazio">Nenhum movimento lançado.</div>'; return; }
   let h='<table><thead><tr><th>Código</th><th>Origem</th><th>Comp.</th><th>Data</th><th>Tipo</th><th>Grupo</th><th>Descrição</th><th>Pessoa</th><th class="num">Valor</th><th>Status</th><th></th></tr></thead><tbody>';
