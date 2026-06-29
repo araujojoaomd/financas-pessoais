@@ -1878,7 +1878,7 @@ function renderCartoesCad(){
   cartoes.forEach(c=>{
     const lim=parseValor(c.Limite), uso=limiteUsado(c), disp=lim-uso;
     const dispCor = lim<=0 ? '#5B6B63' : (disp<0?'#DC2626':(disp<lim*0.15?'#D97706':'#16A34A'));
-    h+='<tr><td>'+esc(c.Nome)+'</td><td>'+pill(c.Perfil)+'</td><td class="mono">'+(c.DiaFechamento?'dia '+esc(c.DiaFechamento):'—')+'</td><td class="mono">'+(c.DiaVencimento?'dia '+esc(c.DiaVencimento):'—')+'</td>'
+    h+='<tr><td>'+esc(c.Nome)+(c.BancoEmissor?'<div style="font-size:10.5px;color:#5B6B63">'+esc(c.BancoEmissor)+'</div>':'')+'</td><td>'+pill(c.Perfil)+'</td><td class="mono">'+(c.DiaFechamento?'dia '+esc(c.DiaFechamento):'—')+'</td><td class="mono">'+(c.DiaVencimento?'dia '+esc(c.DiaVencimento):'—')+'</td>'
      +'<td class="num">'+(lim>0?brl(lim):'—')+'</td><td class="num">'+brl(uso)+'</td><td class="num" style="font-weight:700;color:'+dispCor+'">'+(lim>0?brl(disp):'—')+'</td>'
      +'<td><button class="btn-ic" onclick=\'abrirCartao('+JSON.stringify(c.ID)+')\'>✏️</button><button class="btn-ic" onclick=\'excluirReg("Cartoes",'+JSON.stringify(c.ID)+')\'>🗑️</button></td></tr>';
   });
@@ -1916,9 +1916,10 @@ function abrirCartao(id){
   document.getElementById('modalC').innerHTML =
     '<input type="hidden" id="k-id" value="'+(c?esc(c.ID):'')+'">'
    +'<div class="grid">'
-     +fld('Nome do cartão','<input id="k-nome" value="'+(c?esc(c.Nome):'')+'" placeholder="Ex.: VISA Bradesco">')
+     +fld('Nome do cartão','<input id="k-nome" value="'+(c?esc(c.Nome):'')+'" placeholder="Ex.: VISA Infinite Prime">')
      +fld('Perfil','<select id="k-tit">'+PERFIS.map(t=>opt(t,c?c.Perfil:perfilAtivo)).join('')+'</select>')
    +'</div>'
+   +'<div class="grid full">'+fld('Banco emissor','<input id="k-banco" value="'+(c?esc(c.BancoEmissor||''):'')+'" placeholder="Ex.: Bradesco, Nubank, Banco do Brasil">')+'</div>'
    +'<div class="grid">'
      +fld('Dia de fechamento','<input id="k-fech" type="number" min="1" max="31" value="'+(c?esc(c.DiaFechamento):'')+'" placeholder="ex.: 27">')
      +fld('Dia de vencimento','<input id="k-venc" type="number" min="1" max="31" value="'+(c?esc(c.DiaVencimento):'')+'" placeholder="ex.: 5">')
@@ -1929,6 +1930,7 @@ function abrirCartao(id){
 }
 async function salvarCartao(){
   const reg={ID:document.getElementById('k-id').value||undefined,Nome:document.getElementById('k-nome').value.trim(),Perfil:document.getElementById('k-tit').value,
+    BancoEmissor:document.getElementById('k-banco').value.trim(),
     DiaFechamento:document.getElementById('k-fech').value,DiaVencimento:document.getElementById('k-venc').value,Limite:parseValor(document.getElementById('k-limite').value),Ativo:'SIM'};
   if(!reg.Nome){ alert('Preencha o nome do cartão.'); return; }
   await salvarReg('Cartoes',reg,'k-save');
