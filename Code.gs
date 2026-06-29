@@ -24,7 +24,7 @@ var CLIENT_ID = '864961214405-bipsb4fk0sr0sgi8m9ei81u87rhjshc4.apps.googleuserco
 var ABAS = {
   Contas:         ['ID','Nome','Perfil','SaldoInicial','LimiteCheque','Ativo'],
   Cartoes:        ['ID','Nome','Perfil','DiaFechamento','DiaVencimento','Limite','Ativo'],
-  Compras_Cartao: ['ID','Codigo','Perfil','Natureza','Cartao','DataCompra','Descricao','Grupo','Categoria','ValorParcela','QtdParcelas','CompetenciaInicial','AlvoRef','Criado'],
+  Compras_Cartao: ['ID','Codigo','Perfil','Natureza','Cartao','DataCompra','Descricao','Grupo','Categoria','ValorParcela','QtdParcelas','ParcelasPagas','CompetenciaInicial','AlvoRef','Criado'],
   Recorrentes:    ['ID','Perfil','Tipo','Grupo','Descricao','Categoria','Conta','ValorPadrao','DiaVenc','VigenciaInicio','VigenciaFim','Ativo','EmFolha','SalarioRef'],
   Movimentos:     ['ID','Codigo','Perfil','Competencia','CompGasto','Data','Tipo','Grupo','Categoria','Conta','Descricao','Valor','Status','Origem','Ref'],
   Emprestimos:    ['ID','Perfil','Instituicao','Contrato','DataContratacao','ValorContratado','TxNominal','TxEfetiva','ValorParcela','QtdParcelas','ParcelasPagas','CompetenciaInicial','Tipo','SalarioRef'],
