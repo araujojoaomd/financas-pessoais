@@ -6,7 +6,6 @@
 <title>Finanças Pessoais</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--pc:#16A34A;--pc-head:#0F3D2E;--pc-head-fg:#BFE6D2;--pc-bg:#F6F8FA}
@@ -274,7 +273,6 @@ tbody tr:hover{background:#F3F8F5}
       <button class="btn-ghost" onclick="mudarFatura(1)">próxima ›</button>
       <div class="sep"></div>
       <button class="btn-ghost" onclick="abrirAjusteFatura()">+ Ajuste</button>
-      <button class="btn-ghost" onclick="abrirImportarFatura()">📄 Importar PDF</button>
     </div>
     <div id="faturaResumo" class="resumo" style="grid-template-columns:repeat(3,1fr)"></div>
     <div class="tbl-wrap"><div id="faturaTbl"></div></div>
@@ -2075,92 +2073,6 @@ function renderFaturas(){
     acao.innerHTML='<div style="text-align:right"><button class="btn green" onclick=\'abrirPagarFatura('+JSON.stringify(cardName)+','+JSON.stringify(comp)+')\'>Pagar fatura — falta '+brl(falta)+'</button></div>';
   } else if(total>0){ acao.innerHTML='<div style="text-align:right"><span class="pill p-pago">Fatura paga</span></div>'; }
   else acao.innerHTML='';
-}
-// ===== IMPORTAR FATURA (PDF Bradesco) — Fase 1: ler e conferir =====
-function abrirImportarFatura(){
-  if(consolidado()){ alert('Selecione um perfil (João ou Lívia).'); return; }
-  const cartoes=DB.cartoes.filter(x=>passaPerfil(x.Perfil));
-  document.getElementById('modalT').textContent='Importar fatura (PDF)';
-  document.getElementById('modalC').innerHTML=
-     '<div class="grid full">'+fld('Cartão desta fatura','<select id="imp-cartao">'+(cartoes.length?cartoes.map(c=>opt(c.Nome,document.getElementById('fatCartao')?document.getElementById('fatCartao').value:'')).join(''):'<option value="">(cadastre um cartão)</option>')+'</select>')+'</div>'
-    +'<div class="grid full">'+fld('Arquivo PDF da fatura','<input type="file" id="imp-file" accept="application/pdf,.pdf" onchange="lerPdfFatura(this)">')+'</div>'
-    +'<div id="imp-status" style="font-size:12px;color:#5B6B63;margin:6px 2px">Selecione o PDF da fatura para o app ler.</div>'
-    +'<div id="imp-preview"></div>'
-    +'<div class="acoes"><button class="btn-ghost" onclick="fecharModal()">Fechar</button></div>';
-  abrirModal();
-}
-async function extrairTextoPdf(arrayBuffer){
-  if(typeof pdfjsLib==='undefined') throw new Error('pdf.js não carregou (sem internet?)');
-  if(pdfjsLib.GlobalWorkerOptions && !pdfjsLib.GlobalWorkerOptions.workerSrc)
-    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-  const pdf=await pdfjsLib.getDocument({data:arrayBuffer}).promise;
-  const linhas=[];
-  for(let p=1;p<=pdf.numPages;p++){
-    const page=await pdf.getPage(p);
-    const tc=await page.getTextContent();
-    const buckets={};
-    tc.items.forEach(it=>{ if(!it.str) return; const y=Math.round(it.transform[5]); (buckets[y]=buckets[y]||[]).push({x:it.transform[4],s:it.str}); });
-    Object.keys(buckets).map(Number).sort((a,b)=>b-a).forEach(y=>{
-      const linha=buckets[y].sort((a,b)=>a.x-b.x).map(o=>o.s).join(' ').replace(/\s+/g,' ').trim();
-      if(linha) linhas.push(linha);
-    });
-  }
-  return linhas;
-}
-// Parser do leiaute Bradesco: extrai total, vencimento e os parcelamentos (XX/YY).
-function parseFaturaBradesco(linhas){
-  const txt=linhas.join('\n');
-  let total=null, venc=null;
-  const mTot=txt.match(/Total da fatura em real\s*([\d.]+,\d{2})/i) || txt.match(/Total de fatura\s*R?\$?\s*([\d.]+,\d{2})/i);
-  if(mTot) total=parseValor(mTot[1]);
-  const mVenc=txt.match(/Vencimento\s*(\d{2}\/\d{2}\/\d{4})/i);
-  if(mVenc) venc=mVenc[1];
-  let faturaComp=null;
-  if(venc){ const pp=venc.split('/'); faturaComp=pp[2]+'-'+pp[1]; }
-  const parcelamentos=[], ignoradas=[];
-  linhas.forEach(l=>{
-    const mv=l.match(/([\d.]+,\d{2})\s*$/); if(!mv) return;            // tem valor no fim
-    if(!/^\d{2}\/\d{2}\b/.test(l)) return;                              // começa com data
-    if(/encargos|iof|pagamento|pag boleto|saldo|total para|anuidade|seguro/i.test(l)) return;
-    const valor=parseValor(mv[1]);
-    const semData=l.replace(/^\d{2}\/\d{2}\s*/,'');
-    const mp=semData.match(/(\d{2})\/(\d{2})(?!\/)/);                   // parcela XX/YY (não data)
-    if(!mp){ return; }                                                  // à vista: ignora (vai no lump)
-    const xx=parseInt(mp[1],10), yy=parseInt(mp[2],10);
-    if(!(yy>=2 && yy<=48 && xx>=1 && xx<=yy)) return;                   // sanidade
-    let desc=semData.slice(0, mp.index).replace(/[*]/g,' ').replace(/\s+/g,' ').trim();
-    if(!desc) desc='(sem descrição)';
-    parcelamentos.push({descricao:desc, xx, yy, valor, restantes:yy-xx});
-  });
-  return {total, vencimento:venc, faturaComp, parcelamentos};
-}
-async function lerPdfFatura(input){
-  const f=input.files&&input.files[0]; if(!f) return;
-  const st=document.getElementById('imp-status'); st.textContent='Lendo o PDF…';
-  try{
-    const buf=await f.arrayBuffer();
-    const linhas=await extrairTextoPdf(buf);
-    const parsed=parseFaturaBradesco(linhas);
-    window._impParsed=parsed;
-    renderPreviewImport(parsed);
-    st.textContent='PDF lido com sucesso.';
-  }catch(e){ st.textContent='Erro ao ler o PDF: '+(e&&e.message||e); }
-}
-function renderPreviewImport(p){
-  const el=document.getElementById('imp-preview');
-  const comFalta=p.parcelamentos.filter(x=>x.restantes>=1);
-  let h='<div style="margin-top:6px;font-size:12.5px;background:#F6F8FA;border-radius:8px;padding:10px">'
-    +'<div><b>Total da fatura:</b> '+(p.total!=null?brl(p.total):'<span style="color:#DC2626">não achei</span>')+'</div>'
-    +'<div><b>Vencimento:</b> '+(p.vencimento||'—')+' &nbsp;·&nbsp; <b>competência:</b> '+(p.faturaComp||'—')+'</div>'
-    +'<div><b>Parcelamentos lidos:</b> '+p.parcelamentos.length+' &nbsp;·&nbsp; <b>com parcela a vencer:</b> '+comFalta.length+'</div>'
-    +'</div>';
-  if(p.parcelamentos.length){
-    h+='<div style="max-height:240px;overflow:auto;margin-top:8px;border:1px solid #E3EAE6;border-radius:8px"><table><thead><tr><th>Descrição</th><th>Parcela</th><th class="num">Valor</th></tr></thead><tbody>';
-    p.parcelamentos.forEach(x=>{ h+='<tr><td>'+esc(x.descricao)+'</td><td class="mono">'+x.xx+'/'+x.yy+'</td><td class="num">'+brl(x.valor)+'</td></tr>'; });
-    h+='</tbody></table></div>';
-  } else { h+='<div class="vazio" style="margin-top:8px">Nenhum parcelamento reconhecido. Pode ser leiaute diferente — me avise.</div>'; }
-  h+='<p style="font-size:11px;color:#5B6B63;margin-top:8px"><b>Fase 1 (conferência):</b> confira se os parcelamentos e o total batem com a fatura. Estando certo, eu ligo o lançamento automático (cria os parcelamentos novos + a fatura a pagar, sem duplicar o que já existe).</p>';
-  el.innerHTML=h;
 }
 function abrirAjusteFatura(){
   if(consolidado()){ alert('Selecione um perfil (João ou Lívia).'); return; }
