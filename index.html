@@ -988,9 +988,9 @@ function linhaSalario(l){
   const acao = st!=='PREVISTO'
     ? '<button class="btn-ic" onclick=\'desfazerItem('+l._i+')\' title="Desfazer">↩︎</button>'
     : '<button class="btn-ic" style="background:#16A34A;color:#fff;border-color:#16A34A" onclick="abrirReceberSalario('+l._i+')" title="Receber o líquido">Receber líq.</button>';
-  let h='<tr style="cursor:pointer" onclick="toggleSalario('+JSON.stringify(rid)+')">'
+  let h='<tr style="cursor:pointer" onclick="toggleSalario('+JSON.stringify(rid)+')" title="Clique para ver bruto, descontos e ajustar">'
     +'<td><span style="color:#16A34A">'+(ab?'▾':'▸')+'</span> '+esc(l.descricao)
-      +'<div style="font-size:11px;color:#5B6B63;margin-top:2px">bruto '+brl(l._bruto)+' · −'+brl(l._consig)+' consignados ('+l._pct.toFixed(1).replace('.',',')+'%)</div></td>'
+      +'<div style="font-size:11px;color:#5B6B63;margin-top:2px">bruto '+brl(l._bruto)+' · −'+brl(l._consig)+' descontos ('+l._pct.toFixed(1).replace('.',',')+'%) · <span style="color:#2E5FA3;text-decoration:underline">'+(ab?'ocultar':'ver / ajustar')+'</span></div></td>'
     +'<td>SALÁRIO</td><td>'+pill(l.perfil)+'</td>'
     +'<td class="num" style="font-weight:700;color:#16A34A">'+brl(l.valor)+'<div style="font-size:10px;color:#5B6B63;font-weight:400">líquido</div></td>'
     +'<td>'+stCell+'</td><td onclick="event.stopPropagation()">'+acao+'</td></tr>';
