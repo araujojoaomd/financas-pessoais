@@ -13,8 +13,8 @@
 // Emails autorizados a usar o app (João e Lívia). Ajuste conforme as contas Google reais.
 var EMAILS_AUTORIZADOS = [
   'araujo.joaomd@gmail.com',
-  'joao.marcelo@recife.pe.gov.br'
-  // , 'email-da-livia@gmail.com'
+  'joao.marcelo@recife.pe.gov.br',
+  'livia.barrospe@gmail.com'
 ];
 
 // Client ID OAuth (mesmo do painel SETRI; o token é validado contra ele).
