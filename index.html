@@ -741,20 +741,20 @@ function competenciaVencimento(card, dataBR){
 // Descontos vinculados a um salário (recorrente Entrada·SALÁRIO) numa competência:
 // consignados (Emprestimos·SalarioRef) + despesas "em folha" (Recorrentes·EmFolha·SalarioRef).
 function descontosSalario(salId, comp){
-  const rows=[]; let total=0;
+  const rows=[]; let consig=0, emfolha=0;
   DB.emprestimos.forEach(e=>{
     if(!ehConsignado(e) || e.SalarioRef!==salId) return;
     const qtd=Math.max(1,parseInt(e.QtdParcelas)||1); const ini=e.CompetenciaInicial; if(!ini) return;
     const jaPagas=Math.max(0,parseInt(e.ParcelasPagas)||0);
-    for(let k=jaPagas;k<qtd;k++){ if(compAdd(ini,k)===comp){ const v=parseValor(e.ValorParcela); total+=v; rows.push({descricao:'Consignado '+(e.Instituicao||''), valor:v}); break; } }
+    for(let k=jaPagas;k<qtd;k++){ if(compAdd(ini,k)===comp){ const v=parseValor(e.ValorParcela); consig+=v; rows.push({descricao:'Consignado '+(e.Instituicao||''), valor:v}); break; } }
   });
   DB.recorrentes.forEach(r=>{
     if(String(r.EmFolha||'').toUpperCase()!=='SIM' || r.SalarioRef!==salId) return;
     if(String(r.Ativo).toUpperCase()==='NÃO'||String(r.Ativo).toUpperCase()==='NAO') return;
     const vi=r.VigenciaInicio||'0000-00', vf=r.VigenciaFim||'9999-99';
-    if(comp>=vi && comp<=vf){ const v=parseValor(r.ValorPadrao); total+=v; rows.push({descricao:(r.Descricao||'')+' (folha)', valor:v}); }
+    if(comp>=vi && comp<=vf){ const v=parseValor(r.ValorPadrao); emfolha+=v; rows.push({descricao:(r.Descricao||'')+' (folha)', valor:v}); }
   });
-  return {total, rows};
+  return {total:consig+emfolha, consig:consig, emfolha:emfolha, rows:rows};
 }
 function eventos(){
   const evs=[];
@@ -772,17 +772,25 @@ function eventos(){
     }
   });
   // Empréstimos -> só as parcelas AINDA NÃO pagas (a partir de ParcelasPagas). Gasto=caixa no mesmo mês.
-  // Consignado NÃO vira evento aqui: é absorvido no salário líquido (ver recorrentes/descontosSalario).
+  // CONSIGNADO: o dinheiro é descontado em folha (sai do salário líquido no CAIXA), então a parcela
+  // vira evento SÓ no regime de GASTO (compCaixa vazio) — assim aparece como despesa nos relatórios/Fluxo
+  // sem contar duas vezes no caixa. O salário, no gasto, entra "cheio" (sem o consignado) via valorGasto.
   DB.emprestimos.forEach(e=>{
-    if(ehConsignado(e)) return;
     const qtd=Math.max(1,parseInt(e.QtdParcelas)||1); const ini=e.CompetenciaInicial; if(!ini) return;
     const jaPagas=Math.max(0,parseInt(e.ParcelasPagas)||0);
     const valor=parseValor(e.ValorParcela);
+    const consig=ehConsignado(e);
     for(let k=jaPagas;k<qtd;k++){
       const cc=compAdd(ini,k);
-      evs.push({tipo:'SAÍDA',grupo:'EMPRÉSTIMOS',categoria:e.Instituicao||'',perfil:e.Perfil||'JOÃO',conta:e.Instituicao||'',
-        descricao:(e.Instituicao||'Empréstimo')+' '+(e.Contrato||'')+' ('+(k+1)+'/'+qtd+')',valor,status:'PREVISTO',origem:'EMPRÉSTIMO',
-        ref:'EMP:'+e.ID+':'+k, compGasto:cc, compCaixa:cc, fonte:true, movId:null});
+      if(consig){
+        evs.push({tipo:'SAÍDA',grupo:'EMPRÉSTIMOS',categoria:'Consignado '+(e.Instituicao||''),perfil:e.Perfil||'JOÃO',conta:e.Instituicao||'',
+          descricao:'Consignado '+(e.Instituicao||'')+' '+(e.Contrato||'')+' ('+(k+1)+'/'+qtd+')',valor,status:'PREVISTO',origem:'CONSIGNADO',
+          ref:'CONS:'+e.ID+':'+k, compGasto:cc, compCaixa:'', fonte:true, movId:null});
+      } else {
+        evs.push({tipo:'SAÍDA',grupo:'EMPRÉSTIMOS',categoria:e.Instituicao||'',perfil:e.Perfil||'JOÃO',conta:e.Instituicao||'',
+          descricao:(e.Instituicao||'Empréstimo')+' '+(e.Contrato||'')+' ('+(k+1)+'/'+qtd+')',valor,status:'PREVISTO',origem:'EMPRÉSTIMO',
+          ref:'EMP:'+e.ID+':'+k, compGasto:cc, compCaixa:cc, fonte:true, movId:null});
+      }
     }
   });
   // Recorrentes -> 1 por mês (gasto e caixa no mesmo mês).
@@ -800,8 +808,8 @@ function eventos(){
         const bruto=parseValor(r.ValorPadrao);
         const d=descontosSalario(r.ID, c);
         evs.push({tipo:'ENTRADA',grupo:'SALÁRIO',categoria:'',perfil:r.Perfil||'JOÃO',conta:r.Conta||'',
-          descricao:r.Descricao||'',valor:bruto-d.total,status:'PREVISTO',origem:'RECORRENTE',
-          recId:r.ID, _bruto:bruto, _consig:d.total, _pct:(bruto>0?d.total/bruto*100:0), _descRows:d.rows,
+          descricao:r.Descricao||'',valor:bruto-d.total,valorGasto:bruto-d.emfolha,status:'PREVISTO',origem:'RECORRENTE',
+          recId:r.ID, _bruto:bruto, _consig:d.consig, _emfolha:d.emfolha, _descTotal:d.total, _pct:(bruto>0?d.total/bruto*100:0), _descRows:d.rows,
           ref:'REC:'+r.ID+':'+c, compGasto:c, compCaixa:c, fonte:true, movId:null});
       } else {
         evs.push({tipo:r.Tipo||'SAÍDA',grupo:r.Grupo||'OUTROS',categoria:r.Categoria||'',perfil:r.Perfil||'JOÃO',conta:r.Conta||'',
@@ -841,7 +849,7 @@ function lancGasto(){
   return eventos()
     .filter(e=> e.fonte ? !suprime.has(e.ref) : true)
     .filter(e=> e.compGasto)
-    .map(e=>({...e, comp:e.compGasto}));
+    .map(e=>({...e, comp:e.compGasto, valor:(e.valorGasto!=null?e.valorGasto:e.valor)}));
 }
 
 // ===== RENDER PRINCIPAL =====
@@ -970,7 +978,7 @@ function linhaSalario(l){
     : '<button class="btn-ic" style="background:#16A34A;color:#fff;border-color:#16A34A" onclick="abrirReceberSalario('+l._i+')" title="Receber o líquido">Receber líq.</button>';
   let h='<tr style="cursor:pointer" onclick="toggleSalario('+JSON.stringify(rid)+')">'
     +'<td><span style="color:#16A34A">'+(ab?'▾':'▸')+'</span> '+esc(l.descricao)
-      +'<div style="font-size:11px;color:#5B6B63;margin-top:2px">bruto '+brl(l._bruto)+' · −'+brl(l._consig)+' consignados ('+l._pct.toFixed(1).replace('.',',')+'%)</div></td>'
+      +'<div style="font-size:11px;color:#5B6B63;margin-top:2px">bruto '+brl(l._bruto)+' · −'+brl(l._descTotal!=null?l._descTotal:l._consig)+' descontos ('+l._pct.toFixed(1).replace('.',',')+'%)</div></td>'
     +'<td>SALÁRIO</td><td>'+pill(l.perfil)+'</td>'
     +'<td class="num" style="font-weight:700;color:#16A34A">'+brl(l.valor)+'<div style="font-size:10px;color:#5B6B63;font-weight:400">líquido</div></td>'
     +'<td>'+stCell+'</td><td onclick="event.stopPropagation()">'+acao+'</td></tr>';
