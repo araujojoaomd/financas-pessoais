@@ -2118,11 +2118,11 @@ function parseFaturaBradesco(linhas){
   if(mVenc) venc=mVenc[1];
   let faturaComp=null;
   if(venc){ const pp=venc.split('/'); faturaComp=pp[2]+'-'+pp[1]; }
-  const ehData=l=>/^\d{2}\/\d{2}\s/.test(l);
-  // ruído: encargos/iof/taxas(%)/cabeçalhos/boleto/totais — não são lançamentos e não juntam
-  const ehRuido=l=>/(encargos|iof|pagamento|pag boleto|saldo|total|anuidade|seguro|limites|taxas|n[uú]mero do cart|lan[çc]amentos|^data\b|previs[aã]o|recibo|nosso n|documento|autentica|ag[eê]ncia|benefici|pagador|mensagem|rotativo|%|R\$\s*R\$)/i.test(l)
+  const ehData=l=>/^\d{2}\/\d{2}\b/.test(l);
+  // ruído: encargos/iof/pagamentos/cabeçalhos de cartão/totais — não são lançamentos e não juntam
+  const ehRuido=l=>/^(encargos|iof|pagamento|pag boleto|saldo|total|anuidade|seguro|limites|taxas|n[uú]mero do cart|lan[çc]amentos|data)/i.test(l)
                    || /cart[aã]o\s+\d{4}/i.test(l) || /^joao\b/i.test(l) || /duarte araujo/i.test(l);
-  // monta "blobs": cada lançamento começa numa linha com data; continuações (cidade/valor quebrados) se juntam.
+  // monta "blobs": cada lançamento começa numa linha com data; continuações sem data se juntam.
   const blobs=[]; let cur=null;
   linhas.forEach(l=>{
     if(ehData(l)){ if(cur) blobs.push(cur); cur = ehRuido(l)? null : l; }
@@ -2130,21 +2130,17 @@ function parseFaturaBradesco(linhas){
   });
   if(cur) blobs.push(cur);
   const parcelamentos=[];
-  blobs.forEach(b0=>{
-    if(/previs|recibo|nosso n|document|benefici|autentica|R\$\s*R\$/i.test(b0)) return; // lixo de cabeçalho
-    const b=b0.replace(/^\d{2}\/\d{2}\s*/,'');                            // tira a data inicial
-    const mp=b.match(/(\d{2})\/(\d{2})(?!\/)/);                           // parcela XX/YY (não data)
-    if(!mp) return;                                                       // à vista (ou parcela partida): ignora
+  blobs.forEach(b=>{
+    const vals=b.match(/\d{1,3}(?:\.\d{3})*,\d{2}/g); if(!vals) return;  // precisa de um valor
+    const valor=parseValor(vals[vals.length-1]);
+    let rest=b.replace(/\d{1,3}(?:\.\d{3})*,\d{2}/g,' ')                  // tira os valores
+              .replace(/^\d{2}\/\d{2}\s*/,'')                            // tira a data inicial
+              .replace(/(\d{2}\/\d)\s+(\d)(?!\d)/,'$1$2');               // remonta parcela partida (05/1 0 -> 05/10)
+    const mp=rest.match(/(\d{2})\/(\d{2})(?!\/)/);                        // parcela XX/YY
+    if(!mp) return;                                                       // à vista: ignora (entra no lump)
     const xx=parseInt(mp[1],10), yy=parseInt(mp[2],10);
     if(!(yy>=2 && yy<=48 && xx>=1 && xx<=yy)) return;                     // sanidade
-    // valor = primeiro número (R$) DEPOIS da parcela — evita pegar taxas/encargos no fim do blob
-    const depois=b.slice(mp.index+mp[0].length);
-    let mval=depois.match(/\d{1,3}(?:\.\d{3})*,\d{2}/);
-    if(!mval) mval=b.match(/\d{1,3}(?:\.\d{3})*,\d{2}/);
-    if(!mval) return;
-    const valor=parseValor(mval[0]);
-    if(!(valor>0)) return;
-    let desc=b.slice(0, mp.index).replace(/[*]/g,' ').replace(/\s+/g,' ').trim();
+    let desc=rest.slice(0, mp.index).replace(/[*]/g,' ').replace(/\s+/g,' ').trim();
     if(!desc) desc='(sem descrição)';
     parcelamentos.push({descricao:desc, xx, yy, valor, restantes:yy-xx});
   });
@@ -2180,7 +2176,7 @@ function renderPreviewImport(p){
     + p.parcelamentos.map(x=>x.descricao+'\t'+x.xx+'/'+x.yy+'\t'+String(x.valor).replace('.',',')).join('\n');
   h+='<div style="margin-top:8px"><div style="font-size:11px;color:#5B6B63;margin-bottom:4px">Leitura completa (selecione tudo e copie pra me mandar):</div>'
     +'<textarea readonly onclick="this.select()" style="width:100%;height:120px;font-family:monospace;font-size:11px;border:1px solid #DCE4E0;border-radius:8px;padding:8px">'+esc(dump)+'</textarea></div>';
-  h+='<p style="font-size:11px;color:#5B6B63;margin-top:8px"><b>Fase 1 (conferência) · leitor v3:</b> confira se os parcelamentos e o total batem com a fatura. Estando certo, eu ligo o lançamento automático (cria os parcelamentos novos + a fatura a pagar, sem duplicar o que já existe).</p>';
+  h+='<p style="font-size:11px;color:#5B6B63;margin-top:8px"><b>Fase 1 (conferência) · leitor v2.1:</b> confira se os parcelamentos e o total batem com a fatura. Estando certo, eu ligo o lançamento automático (cria os parcelamentos novos + a fatura a pagar, sem duplicar o que já existe).</p>';
   el.innerHTML=h;
 }
 function abrirAjusteFatura(){
