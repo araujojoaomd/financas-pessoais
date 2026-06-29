@@ -85,6 +85,8 @@ tbody tr:hover{background:#F3F8F5}
 .matriz thead th.grupo{background:var(--pc-head)}
 .matriz td.num{text-align:right}
 .matriz tr.grp-h td{background:#EAF3EE;font-weight:700;color:#0F3D2E;text-transform:uppercase;font-size:11px}
+.matriz tr.grp-h-rec td{background:#DCFCE7;color:#166534}
+.matriz tr.grp-h-desp td{background:#FEF0CD;color:#B45309}
 .matriz tr.tot td{background:var(--pc-head);color:#fff;font-weight:700}
 .matriz tr.tot td.grupo{background:var(--pc-head);color:#fff}
 .matriz tr.liq td{background:var(--pc);color:#fff;font-weight:700}
@@ -134,9 +136,9 @@ tbody tr:hover{background:#F3F8F5}
 .grp-body table{border:none;border-radius:0}
 .grp-body thead th{background:#fff;color:#94A3A0;border-bottom:1px solid #EEF2F0}
 /* GRUPOS COLAPSÁVEIS NA MATRIZ (Fluxo) */
-.matriz tr.grp-origem td{background:#EAF3EE;font-weight:700;color:#0F3D2E;cursor:pointer}
-.matriz tr.grp-origem td.grupo{background:#EAF3EE}
-.matriz tr.grp-origem:hover td{background:#DDEDE3}
+.matriz tr.grp-origem td{background:#FEF6E0;font-weight:700;color:#B45309;cursor:pointer}
+.matriz tr.grp-origem td.grupo{background:#FEF6E0}
+.matriz tr.grp-origem:hover td{background:#FBEAC4}
 .matriz tr.grp-det td.grupo{padding-left:30px;font-weight:400;color:#3F4F48}
 .matriz col.col-atual{background:#FFF6E0}
 .matriz thead th.col-atual{background:var(--pc);color:#fff;font-weight:700}
@@ -1193,7 +1195,7 @@ function renderFluxo(){
   ['Recorrentes','Pagamentos/Compras','Cartão','Empréstimos'].forEach(o=>{
     if(!despSub[o] || !Object.keys(despSub[o]).length) return;
     const aberto = fluxoGruposAbertos[o]===true;
-    h+='<tr class="grp-origem" onclick="toggleFluxoGrupo('+JSON.stringify(o)+')"><td class="grupo">'+(aberto?'▾ ':'▸ ')+esc(o)+'</td>'
+    h+='<tr class="grp-origem" onclick=\'toggleFluxoGrupo('+JSON.stringify(o)+')\'><td class="grupo">'+(aberto?'▾ ':'▸ ')+esc(o)+'</td>'
       +comps.map(cp=>celula(despSub[o][cp])).join('')+'</tr>';
     if(aberto){
       Object.keys(desp[o]).sort().forEach(g=>{ h+='<tr class="grp-det"><td class="grupo">'+esc(g)+'</td>'+comps.map(cp=>celula(desp[o][g][cp])).join('')+'</tr>'; });
@@ -1216,7 +1218,7 @@ function renderFluxo(){
     : '<b>Regime de caixa (desembolso):</b> a saída aparece no mês em que o dinheiro de fato sai — para cartão, no vencimento da fatura. É a lente que bate com o saldo do banco.';
 }
 function card(lbl,val,cls){ return '<div class="rcard"><div class="lbl">'+lbl+'</div><div class="val '+cls+'">'+val+'</div></div>'; }
-function linhaSecao(t,comps){ return '<tr class="grp-h"><td class="grupo">'+t+'</td><td colspan="'+comps.length+'"></td></tr>'; }
+function linhaSecao(t,comps){ const cls = t==='RECEITAS'?'grp-h grp-h-rec':(t==='DESPESAS'?'grp-h grp-h-desp':'grp-h'); return '<tr class="'+cls+'"><td class="grupo">'+t+'</td><td colspan="'+comps.length+'"></td></tr>'; }
 
 // ===== COMPRAS DE CARTÃO =====
 function renderCompras(){
