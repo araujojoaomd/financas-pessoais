@@ -135,9 +135,7 @@ tbody tr:hover{background:#F3F8F5}
 .grp-body table{border:none;border-radius:0}
 .grp-body thead th{background:#fff;color:#94A3A0;border-bottom:1px solid #EEF2F0}
 /* GRUPOS COLAPSÁVEIS NA MATRIZ (Fluxo) */
-.matriz tr.grp-origem td{background:#EFF4F1;font-weight:700;color:#0F3D2E;cursor:pointer}
-.matriz tr.grp-origem td.grupo{background:#EFF4F1;text-transform:uppercase}
-.matriz tr.grp-origem:hover td{background:#E3EDE7}
+.matriz tr.grp-origem td.grupo{font-weight:700;color:#0F3D2E;text-transform:uppercase}
 .matriz tr.rec-item td.grupo{font-weight:600}
 .matriz tr.grp-det td.grupo{padding-left:30px;font-weight:400;color:#3F4F48}
 .matriz td.col-atual,.matriz th.col-atual{border-left:2px solid var(--pc-head);border-right:2px solid var(--pc-head)}
@@ -1189,37 +1187,45 @@ function renderFluxo(){
    + card('Saldo do mês',brl(inMes-outMes),(inMes-outMes)<0?'v-neg':'v-liq')
    + card('Compras de cartão ativas',String(DB.compras.length),'v-liq');
 
-  // agrega por grupo; cada célula guarda {t:total, c:confirmado}. Cor por status (confirmado x previsto).
-  const rec={}, desp={}, despSub={};
-  const ehConf = l => String(l.status||'PREVISTO').toUpperCase()!=='PREVISTO';
-  const acc=(obj,cp,l)=>{ const cell=obj[cp]||(obj[cp]={t:0,c:0}); cell.t+=l.valor; if(ehConf(l)) cell.c+=l.valor; };
+  // Espelha o Controle Mês: ENTRADAS (1 grupo) · SAÍDAS (Cartões -> por cartão; demais 1 grupo cada).
+  const entr={};                       // comp -> total das entradas
+  const ORD=['Cartão','Recorrentes','Pagamentos/Compras','Empréstimos'];
+  const LABEL_FLUXO={'Cartão':'Cartões','Recorrentes':'Pagamentos Recorrentes','Pagamentos/Compras':'Outros Pagamentos','Empréstimos':'Empréstimos'};
+  const grp={}; ORD.forEach(o=>grp[o]={});
+  const cartaoCard={};                 // nome do cartão -> {comp:total}
   lanc.forEach(l=>{
     if(!compSet.has(l.comp)) return;
-    if(l.tipo==='ENTRADA'){ rec[l.grupo]=rec[l.grupo]||{}; acc(rec[l.grupo], l.comp, l); }
-    else { const o=grupoOrigemSaida(l.origem); desp[o]=desp[o]||{}; desp[o][l.grupo]=desp[o][l.grupo]||{}; acc(desp[o][l.grupo], l.comp, l); despSub[o]=despSub[o]||{}; acc(despSub[o], l.comp, l); }
+    if(l.tipo==='ENTRADA'){ entr[l.comp]=(entr[l.comp]||0)+l.valor; return; }
+    const o=grupoOrigemSaida(l.origem); grp[o][l.comp]=(grp[o][l.comp]||0)+l.valor;
+    if(o==='Cartão'){ const cn=l.conta||'(cartão)'; cartaoCard[cn]=cartaoCard[cn]||{}; cartaoCard[cn][l.comp]=(cartaoCard[cn][l.comp]||0)+l.valor; }
   });
-  const COR_CONF='#0F3D2E', COR_PREV='#C77F0A'; // realizado x previsto/a realizar
-  const celula=(cell,cp)=>{ const a=(cp===mAtual?' col-atual':'');
-    if(!cell || !cell.t) return '<td class="num'+a+'" style="color:#C2CDC7">—</td>';
-    const conf = cell.c>=cell.t-0.005;
-    return '<td class="num'+a+'" style="color:'+(conf?COR_CONF:COR_PREV)+(conf?'':';font-style:italic')+'">'+brl(cell.t)+'</td>'; };
+  // mapa de calor: fundo da célula por intensidade (valor / máximo da linha). Fonte normal.
+  const heatTd=(v,rowMax,cp)=>{ const a=(cp===mAtual?' col-atual':'');
+    if(!v) return '<td class="num'+a+'" style="color:#C2CDC7">—</td>';
+    const t=rowMax>0?Math.min(1,v/rowMax):0, k=t*0.72;
+    const r=Math.round(255-k*10), g=Math.round(255-k*97), b=Math.round(255-k*244);
+    return '<td class="num'+a+'" style="background:rgb('+r+','+g+','+b+')">'+brl(v)+'</td>'; };
+  const linhaMatriz=(label,classe,valores,indent)=>{
+    const max=Math.max(0,...comps.map(cp=>valores[cp]||0));
+    let r='<tr class="'+classe+'"><td class="grupo"'+(indent?' style="padding-left:30px;font-weight:400"':'')+'>'+esc(label)+'</td>';
+    r+=comps.map(cp=>heatTd(valores[cp]||0, max, cp)).join('');
+    return r+'</tr>'; };
 
   let cg='<colgroup><col>'; comps.forEach(cp=>cg+='<col'+(cp===mAtual?' class="col-atual"':'')+'>'); cg+='</colgroup>';
   let h='<table class="matriz">'+cg+'<thead><tr><th class="grupo">Grupo</th>';
   comps.forEach(cp=>h+='<th class="num'+(cp===mAtual?' col-atual':'')+'">'+compLabel(cp)+'</th>'); h+='</tr></thead><tbody>';
-  // ENTRADAS (por grupo) — espelha o Controle Mês
+  // ENTRADAS
   h+=linhaSecao('ENTRADAS',comps);
-  Object.keys(rec).sort().forEach(g=>{ h+='<tr class="rec-item"><td class="grupo">'+esc(g)+'</td>'+comps.map(cp=>celula(rec[g][cp],cp)).join('')+'</tr>'; });
-  // SAÍDAS (mesma organização do Mês: Cartões, Pagamentos Recorrentes, Outros Pagamentos, Empréstimos)
+  h+=linhaMatriz('Entradas','rec-item', entr, false);
+  // SAÍDAS
   h+=linhaSecao('SAÍDAS',comps);
-  const LABEL_FLUXO={'Cartão':'Cartões','Recorrentes':'Pagamentos Recorrentes','Pagamentos/Compras':'Outros Pagamentos','Empréstimos':'Empréstimos'};
-  ['Cartão','Recorrentes','Pagamentos/Compras','Empréstimos'].forEach(o=>{
-    if(!despSub[o] || !Object.keys(despSub[o]).length) return;
-    const aberto = fluxoGruposAbertos[o]===true;
-    h+='<tr class="grp-origem" onclick=\'toggleFluxoGrupo('+JSON.stringify(o)+')\'><td class="grupo">'+(aberto?'▾ ':'▸ ')+esc(LABEL_FLUXO[o]||o)+'</td>'
-      +comps.map(cp=>celula(despSub[o][cp],cp)).join('')+'</tr>';
-    if(aberto){
-      Object.keys(desp[o]).sort().forEach(g=>{ h+='<tr class="grp-det"><td class="grupo">'+esc(g)+'</td>'+comps.map(cp=>celula(desp[o][g][cp],cp)).join('')+'</tr>'; });
+  ORD.forEach(o=>{
+    if(!Object.keys(grp[o]).length) return;
+    if(o==='Cartão'){
+      h+=linhaMatriz('Cartões','grp-origem', grp[o], false);
+      Object.keys(cartaoCard).sort().forEach(cn=>{ h+=linhaMatriz(cn,'grp-det', cartaoCard[cn], true); });
+    } else {
+      h+=linhaMatriz(LABEL_FLUXO[o],'grp-origem', grp[o], false);
     }
   });
   // totais
@@ -1234,7 +1240,7 @@ function renderFluxo(){
   h+='<tr class="liq"><td class="grupo">VALOR LÍQUIDO</td>'+comps.map(cp=>'<td class="num'+(cp===mAtual?' col-atual':'')+'">'+brl(liq[cp])+'</td>').join('')+'</tr>';
   h+='</tbody></table>';
   document.getElementById('fluxoTbl').innerHTML = h;
-  const legenda='<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:6px;font-size:11.5px"><span style="display:inline-flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:3px;background:#0F3D2E;display:inline-block"></span>Confirmado (realizado)</span><span style="display:inline-flex;align-items:center;gap:6px"><span style="width:12px;height:12px;border-radius:3px;background:#C77F0A;display:inline-block"></span><span style="font-style:italic">Previsto (a realizar)</span></span></div>';
+  const legenda='<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:11.5px;color:#3F4F48">Mapa de calor (por linha): <span style="display:inline-block;width:120px;height:12px;border-radius:3px;background:linear-gradient(90deg,#fff,rgb(248,185,79));border:1px solid #E3EAE6"></span> menor → maior valor no mês</div>';
   document.getElementById('fluxoNota').innerHTML = legenda + (regimeFluxo==='GASTO'
     ? '<b>Regime de gasto (competência):</b> o pagamento/compra aparece no mês em que você comprou/consumiu. Compra no cartão entra no mês da compra.'
     : '<b>Regime de caixa (desembolso):</b> a saída aparece no mês em que o dinheiro de fato sai — para cartão, no vencimento da fatura. É a lente que bate com o saldo do banco.');
