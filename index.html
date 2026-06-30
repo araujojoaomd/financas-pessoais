@@ -705,10 +705,13 @@ function compAtual(){ const d=new Date(); return d.getFullYear()+'-'+String(d.ge
 function compDeData(dataBR){ if(!dataBR) return compAtual(); const p=String(dataBR).split('/'); if(p.length!==3) return compAtual(); return p[2]+'-'+p[1].padStart(2,'0'); }
 function pill(p){ const c={'JOÃO':'p-joao','LÍVIA':'p-livia'}[p]||'p-comum'; return '<span class="pill '+c+'">'+(p||'—')+'</span>'; }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function passaPerfil(p){ if(perfilAtivo==='CONSOLIDADO') return true; return (p||'JOÃO')===perfilAtivo; }
+// Normaliza perfil ignorando acento/caixa, pra JOÃO == JOAO == joão (evita mismatch em imports/planilha).
+function normPerfil(s){ return String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().trim(); }
+function mesmoPerfil(a,b){ return normPerfil(a)===normPerfil(b); }
+function passaPerfil(p){ if(perfilAtivo==='CONSOLIDADO') return true; return mesmoPerfil(p||'JOÃO', perfilAtivo); }
 function consolidado(){ return perfilAtivo==='CONSOLIDADO'; }
 // Contas bancárias (aba Contas) e cartões (aba Cartoes) são fontes separadas
-function contasDoPerfil(){ return DB.contas.filter(c=>consolidado()||(c.Perfil||'JOÃO')===perfilAtivo); }
+function contasDoPerfil(){ return DB.contas.filter(c=>consolidado()||mesmoPerfil(c.Perfil||'JOÃO',perfilAtivo)); }
 function optsContas(sel){ const arr=contasDoPerfil(); if(!arr.length) return '<option value="">(cadastre uma conta)</option>'; return arr.map(c=>opt(c.Nome,sel)).join(''); }
 function contaPadrao(preferida){ const arr=contasDoPerfil(); if(arr.some(c=>c.Nome===preferida)) return preferida; return arr[0]?arr[0].Nome:''; }
 // Código curto sequencial por prefixo (CMP/PAG/PIX/MOV)
@@ -1252,7 +1255,7 @@ function renderCompras(){
 function abrirLancCartao(id){
   if(!id && consolidado()){ alert('Selecione um perfil (João ou Lívia) para lançar.'); return; }
   const c = id? DB.compras.find(x=>x.ID===id): null;
-  const cartoesDisp = DB.cartoes.filter(x=>consolidado()||c||(x.Perfil||'JOÃO')===perfilAtivo);
+  const cartoesDisp = DB.cartoes.filter(x=>consolidado()||c||mesmoPerfil(x.Perfil||'JOÃO',perfilAtivo));
   const cartoes = cartoesDisp.length? cartoesDisp.map(x=>opt(x.Nome,c&&c.Cartao)).join('') : '<option value="">(cadastre um cartão)</option>';
   const natC = c? (c.Natureza||'COMPRA').toUpperCase() : 'COMPRA';
   const tipoIni = natC==='PAGAMENTO'?'PAGAMENTO':(natC==='PIX_PROPRIO'?'PIX':'COMPRA');
@@ -1399,7 +1402,7 @@ function renderRecLista(tipo, elId){
 }
 // Salários cadastrados (Recorrente · Entrada · grupo SALÁRIO) do perfil ativo — alvo dos consignados.
 function salariosDoPerfil(){
-  return DB.recorrentes.filter(r=> String(r.Tipo||'').toUpperCase()==='ENTRADA' && String(r.Grupo||'').toUpperCase()==='SALÁRIO' && r.Perfil===perfilAtivo);
+  return DB.recorrentes.filter(r=> String(r.Tipo||'').toUpperCase()==='ENTRADA' && String(r.Grupo||'').toUpperCase()==='SALÁRIO' && mesmoPerfil(r.Perfil,perfilAtivo));
 }
 function campoSalarioRef(idEl, sel){
   const sals=salariosDoPerfil();
