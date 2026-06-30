@@ -962,13 +962,14 @@ function linhaMes(l,i){
   }
   return '<tr><td>'+esc(l.descricao)+'</td><td>'+esc(l.grupo)+'</td><td>'+pill(l.perfil)+'</td><td class="num">'+brl(l.valor)+'</td><td>'+statusCell+'</td><td>'+acaoCell+'</td></tr>';
 }
-function caixaMes(nome, itens, cor){
+function caixaMes(chave, itens, cor, rotulo){
   if(!itens.length) return '';
+  rotulo = rotulo || chave;
   const total=itens.reduce((s,l)=>s+l.valor,0);
   const feitos=itens.filter(l=>(l.status||'PREVISTO').toUpperCase()!=='PREVISTO').length;
-  const aberto = mesGruposAbertos[nome]!==false;
-  let h='<div class="grp-box"><div class="grp-head" onclick=\'toggleGrupoMes('+JSON.stringify(nome)+')\'>'
-    +'<span class="grp-chev">'+(aberto?'▾':'▸')+'</span><span class="grp-nome">'+esc(nome)+'</span>'
+  const aberto = mesGruposAbertos[chave]!==false;
+  let h='<div class="grp-box"><div class="grp-head" onclick=\'toggleGrupoMes('+JSON.stringify(chave)+')\'>'
+    +'<span class="grp-chev">'+(aberto?'▾':'▸')+'</span><span class="grp-nome">'+esc(rotulo)+'</span>'
     +'<span class="grp-cont">'+feitos+'/'+itens.length+'</span>'
     +'<span class="grp-tot" style="color:'+cor+'">'+brl(total)+'</span></div>';
   if(aberto){
@@ -986,7 +987,7 @@ function caixaMesEntradas(itens){
   const total=itens.reduce((s,l)=>s+l.valor,0);
   const feitos=itens.filter(l=>(l.status||'PREVISTO').toUpperCase()!=='PREVISTO').length;
   const aberto = mesGruposAbertos['Entradas']!==false;
-  let h='<div class="grp-box"><div class="grp-head" onclick="toggleGrupoMes(\'Entradas\')">'
+  let h='<div class="grp-box"><div class="grp-head" style="background:#E8FAEE" onclick="toggleGrupoMes(\'Entradas\')">'
     +'<span class="grp-chev">'+(aberto?'▾':'▸')+'</span><span class="grp-nome">Entradas</span>'
     +'<span class="grp-cont">'+feitos+'/'+itens.length+'</span>'
     +'<span class="grp-tot" style="color:#16A34A">'+brl(total)+'</span></div>';
@@ -1058,7 +1059,7 @@ function caixaMesFaturas(faturas, comp){
   const total=faturas.reduce((s,f)=>s+f.total,0), falta=faturas.reduce((s,f)=>s+Math.max(0,f.falta),0);
   const aberto = mesGruposAbertos['Cartão']!==false;
   let h='<div class="grp-box"><div class="grp-head" onclick="toggleGrupoMes(\'Cartão\')">'
-    +'<span class="grp-chev">'+(aberto?'▾':'▸')+'</span><span class="grp-nome">Cartão (faturas)</span>'
+    +'<span class="grp-chev">'+(aberto?'▾':'▸')+'</span><span class="grp-nome">Cartões</span>'
     +'<span class="grp-cont">falta '+brl(falta)+'</span>'
     +'<span class="grp-tot" style="color:#DC2626">'+brl(total)+'</span></div>';
   if(aberto){
@@ -1093,11 +1094,12 @@ function renderMes(){
    + card('Falta nas faturas',brl(faltaFat),faltaFat>0.005?'v-out':'v-liq');
   if(!naoCartao.length && !faturas.length){ document.getElementById('mesTbl').innerHTML='<div class="vazio">Nada previsto para '+compLabel(comp)+'.</div>'; return; }
   const ordem=['Recorrentes','Pagamentos/Compras','Empréstimos'];
+  const LABEL_MES={'Recorrentes':'Pagamentos Recorrentes','Pagamentos/Compras':'Outros Pagamentos','Empréstimos':'Empréstimos'};
   const gs={}; ordem.forEach(g=>gs[g]=[]);
   saidas.forEach(l=>{ gs[grupoOrigemSaida(l.origem)].push(l); });
   let h = caixaMesEntradas(entradas);
-  ordem.forEach(g=>{ h += caixaMes(g, gs[g], '#DC2626'); });
   h += caixaMesFaturas(faturas, comp);
+  ordem.forEach(g=>{ h += caixaMes(g, gs[g], '#DC2626', LABEL_MES[g]); });
   document.getElementById('mesTbl').innerHTML = h;
 }
 async function desfazerItem(i){
@@ -1881,7 +1883,9 @@ function renderContasBancarias(){
     let cheque;
     if(saldo>=0) cheque='<span class="pill p-pago">no positivo</span>';
     else { const uso=-saldo, rest=lim-uso; cheque='<span class="pill p-atr">−'+brl(uso).replace('R$','R$ ').trim()+' usado</span>'+(rest<0?' <span style="color:#B91C1C;font-size:11px">estourou o limite!</span>':' <span style="color:#5B6B63;font-size:11px">resta '+brl(rest)+'</span>'); }
-    h+='<tr><td>'+esc(c.Nome)+'</td><td>'+pill(c.Perfil)+'</td><td class="num">'+brl(parseValor(c.SaldoInicial))+'</td><td class="num" style="font-weight:700;color:'+(saldo<0?'#DC2626':'#16A34A')+'">'+brl(saldo)+'</td><td class="num">'+brl(lim)+'</td><td>'+cheque+'</td>'
+    const sub=[c.Banco, (c.Agencia?'Ag '+c.Agencia:''), (c.NumConta?'C/C '+c.NumConta:'')].filter(Boolean).join(' · ');
+    const pixLn=c.ChavePix?'<div style="font-size:10.5px;color:#2E5FA3">PIX: '+esc(c.ChavePix)+'</div>':'';
+    h+='<tr><td>'+esc(c.Nome)+(sub?'<div style="font-size:10.5px;color:#5B6B63">'+esc(sub)+'</div>':'')+pixLn+'</td><td>'+pill(c.Perfil)+'</td><td class="num">'+brl(parseValor(c.SaldoInicial))+'</td><td class="num" style="font-weight:700;color:'+(saldo<0?'#DC2626':'#16A34A')+'">'+brl(saldo)+'</td><td class="num">'+brl(lim)+'</td><td>'+cheque+'</td>'
      +'<td><button class="btn-ic" onclick=\'abrirConta('+JSON.stringify(c.ID)+')\'>✏️</button><button class="btn-ic" onclick=\'excluirReg("Contas",'+JSON.stringify(c.ID)+')\'>🗑️</button></td></tr>';
   });
   el.innerHTML=h+'</tbody></table>';
@@ -1912,6 +1916,14 @@ function abrirConta(id){
      +fld('Perfil','<select id="c-tit">'+PERFIS.map(t=>opt(t,c?c.Perfil:perfilAtivo)).join('')+'</select>')
    +'</div>'
    +'<div class="grid">'
+     +fld('Banco','<input id="c-banco" value="'+(c?esc(c.Banco||''):'')+'" placeholder="Ex.: Banco do Brasil, Nubank">')
+     +fld('Agência','<input id="c-ag" value="'+(c?esc(c.Agencia||''):'')+'" placeholder="ex.: 1234-5">')
+   +'</div>'
+   +'<div class="grid">'
+     +fld('Nº da conta','<input id="c-num" value="'+(c?esc(c.NumConta||''):'')+'" placeholder="ex.: 12345-6">')
+     +fld('Chave PIX associada','<input id="c-pix" value="'+(c?esc(c.ChavePix||''):'')+'" placeholder="CPF, e-mail, telefone ou aleatória">')
+   +'</div>'
+   +'<div class="grid">'
      +fld('Saldo inicial (R$)','<input id="c-saldo" inputmode="decimal" value="'+(c?String(parseValor(c.SaldoInicial)).replace('.',','):'0')+'" placeholder="saldo de partida">')
      +fld('Limite do cheque especial (R$)','<input id="c-cheque" inputmode="decimal" value="'+(c?String(parseValor(c.LimiteCheque)).replace('.',','):'0')+'">')
    +'</div>'
@@ -1919,8 +1931,10 @@ function abrirConta(id){
   abrirModal();
 }
 async function salvarConta(){
+  const g=id=>{const e=document.getElementById(id);return e?e.value.trim():'';};
   const reg={ID:document.getElementById('c-id').value||undefined,Nome:document.getElementById('c-nome').value.trim(),Perfil:document.getElementById('c-tit').value,
-    SaldoInicial:parseValor(document.getElementById('c-saldo').value),LimiteCheque:parseValor(document.getElementById('c-cheque').value),Ativo:'SIM'};
+    SaldoInicial:parseValor(document.getElementById('c-saldo').value),LimiteCheque:parseValor(document.getElementById('c-cheque').value),Ativo:'SIM',
+    Banco:g('c-banco'),Agencia:g('c-ag'),NumConta:g('c-num'),ChavePix:g('c-pix')};
   if(!reg.Nome){ alert('Preencha o nome.'); return; }
   await salvarReg('Contas',reg,'c-save');
 }

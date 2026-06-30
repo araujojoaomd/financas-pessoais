@@ -22,7 +22,7 @@ var CLIENT_ID = '864961214405-bipsb4fk0sr0sgi8m9ei81u87rhjshc4.apps.googleuserco
 
 // Definição das abas e seus cabeçalhos. A ORDEM aqui é a ordem das colunas.
 var ABAS = {
-  Contas:         ['ID','Nome','Perfil','SaldoInicial','LimiteCheque','Ativo'],
+  Contas:         ['ID','Nome','Perfil','SaldoInicial','LimiteCheque','Ativo','Banco','Agencia','NumConta','ChavePix'],
   Cartoes:        ['ID','Nome','Perfil','DiaFechamento','DiaVencimento','Limite','Ativo','BancoEmissor'],
   Compras_Cartao: ['ID','Codigo','Perfil','Natureza','Cartao','DataCompra','Descricao','Grupo','Categoria','ValorParcela','QtdParcelas','ParcelasPagas','CompetenciaInicial','AlvoRef','Criado'],
   Recorrentes:    ['ID','Perfil','Tipo','Grupo','Descricao','Categoria','Conta','ValorPadrao','DiaVenc','VigenciaInicio','VigenciaFim','Ativo','EmFolha','SalarioRef'],
