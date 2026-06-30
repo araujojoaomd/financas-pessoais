@@ -146,6 +146,12 @@ tbody tr:hover{background:#F3F8F5}
 .matriz td.col-atual,.matriz th.col-atual{border-left:2px solid var(--pc-head);border-right:2px solid var(--pc-head)}
 .matriz thead th.col-atual{background:var(--pc);color:#fff;font-weight:700;border-top:2px solid var(--pc-head)}
 .matriz tr.liq td.col-atual{border-bottom:2px solid var(--pc-head)}
+.fat-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:5px 12px;border:1px solid #DCE4E0;border-radius:999px;cursor:pointer;background:#fff;margin:0 6px 6px 0;user-select:none}
+.fat-chip.on{background:#EAF3EE;border-color:var(--pc);color:#0F3D2E;font-weight:600}
+.fat-chip input{margin:0;cursor:pointer}
+th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
+th.sortable:hover{color:var(--pc)}
+th.sortable .seta{opacity:.55;font-size:10px}
 @media(max-width:768px){.resumo{grid-template-columns:repeat(2,1fr)}.hdr-brand .titulo{font-size:15px}
   .layout{flex-direction:column}
   .sidebar,.sidebar.collapsed{position:static;top:auto;width:auto;flex-direction:row;overflow-x:auto;padding:8px 12px;gap:4px;border-bottom:1px solid #E3EAE6;background:#fff}
@@ -203,7 +209,7 @@ tbody tr:hover{background:#F3F8F5}
   <button class="side-item" data-view="recpagamentos" onclick="setView('recpagamentos')"><span class="si-ic">🔁</span><span class="si-lbl">Pagamentos Recorrentes</span></button>
   <div class="side-h">Situação</div>
   <button class="side-item" data-view="emprestimos" onclick="setView('emprestimos')"><span class="si-ic">🏦</span><span class="si-lbl">Empréstimos</span></button>
-  <button class="side-item" data-view="faturas" onclick="setView('faturas')"><span class="si-ic">🧾</span><span class="si-lbl">Fatura dos Cartões</span></button>
+  <button class="side-item" data-view="faturas" onclick="setView('faturas')"><span class="si-ic">🧾</span><span class="si-lbl">Faturas dos Cartões</span></button>
   <button class="side-item" data-view="extrato" onclick="setView('extrato')"><span class="si-ic">📄</span><span class="si-lbl">Extrato Bancário</span></button>
   <button class="side-item" data-view="movimentos" onclick="setView('movimentos')"><span class="si-ic">📋</span><span class="si-lbl">Histórico</span></button>
   <div class="side-h">Cadastros</div>
@@ -272,17 +278,18 @@ tbody tr:hover{background:#F3F8F5}
   <!-- FATURAS -->
   <div class="view" id="v-faturas">
     <div class="toolbar">
-      <h2>Fatura do cartão</h2>
-      <select class="flt" id="fatCartao" onchange="renderFaturas()"></select>
+      <h2>Faturas dos cartões</h2>
       <button class="btn-ghost" onclick="mudarFatura(-1)">‹ anterior</button>
       <input class="flt" id="fatComp" style="width:120px;text-align:center" onchange="renderFaturas()">
       <button class="btn-ghost" onclick="mudarFatura(1)">próxima ›</button>
       <div class="sep"></div>
       <button class="btn-ghost" onclick="abrirAjusteFatura()">+ Ajuste</button>
     </div>
+    <div id="fatCartoes" style="padding:4px 2px 12px"></div>
     <div id="faturaResumo" class="resumo" style="grid-template-columns:repeat(3,1fr)"></div>
     <div class="tbl-wrap"><div id="faturaTbl"></div></div>
     <div id="faturaAcao" style="margin-top:14px"></div>
+    <div id="faturaChart" style="margin-top:22px"></div>
     <p style="font-size:11.5px;color:#5B6B63;margin-top:10px">A fatura é o que sai do caixa. Se o valor do banco não bater (compra que não entrou, juros, rotativo), some um <b>Ajuste</b>. Pagar a fatura dá baixa em tudo e devolve o limite do cartão.</p>
   </div>
 
@@ -1063,7 +1070,7 @@ function caixaMesFaturas(faturas, comp){
   }
   return h+'</div>';
 }
-function verFatura(card,comp){ setView('faturas'); const fc=document.getElementById('fatComp'); if(fc) fc.value=comp; const sc=document.getElementById('fatCartao'); renderFaturas(); if(sc) sc.value=card; renderFaturas(); }
+function verFatura(card,comp){ setView('faturas'); const fc=document.getElementById('fatComp'); if(fc) fc.value=comp; fatCartoesSel=new Set([card]); renderFaturas(); }
 function renderMes(){
   const comp = mesCompAtual();
   const todos = lancCaixa().filter(l=>l.comp===comp && passaPerfil(l.perfil));
@@ -2052,53 +2059,142 @@ async function quitarDespesaViaCartao(l, cartaoPagador){
 }
 function card3(lbl,val){ return '<div class="rcard"><div class="lbl">'+lbl+'</div><div class="val v-liq">'+val+'</div></div>'; }
 function mudarFatura(d){ const el=document.getElementById('fatComp'); const base=/^\d{4}-\d{2}$/.test(el.value)?el.value:compAtual(); el.value=compAdd(base,d); renderFaturas(); }
+// ----- Faturas: multi-seleção de cartões, ordenação e gráfico -----
+let fatCartoesSel=null;          // Set de nomes de cartão selecionados
+let fatSort={col:'data', dir:1}; // ordenação padrão: data da compra, crescente
+function cardsFaturaPerfil(){ return DB.cartoes.filter(c=>passaPerfil(c.Perfil)); }
+function renderFatCartoesSel(){
+  const cont=document.getElementById('fatCartoes'); if(!cont) return;
+  const cards=cardsFaturaPerfil();
+  if(!cards.length){ cont.innerHTML=''; return; }
+  if(!fatCartoesSel) fatCartoesSel=new Set(cards.map(c=>c.Nome));
+  const nomes=new Set(cards.map(c=>c.Nome));
+  [...fatCartoesSel].forEach(n=>{ if(!nomes.has(n)) fatCartoesSel.delete(n); });
+  if(!fatCartoesSel.size) cards.forEach(c=>fatCartoesSel.add(c.Nome));
+  cont.innerHTML='<span style="font-size:11px;color:#5B6B63;margin-right:8px">Cartões:</span>'
+    + cards.map(c=>{ const on=fatCartoesSel.has(c.Nome);
+        return '<label class="fat-chip'+(on?' on':'')+'"><input type="checkbox" '+(on?'checked':'')+' onchange=\'toggleFatCartao('+JSON.stringify(c.Nome)+')\'>'+esc(c.Nome)+'</label>'; }).join('');
+}
+function toggleFatCartao(nome){ if(!fatCartoesSel) fatCartoesSel=new Set(); if(fatCartoesSel.has(nome)) fatCartoesSel.delete(nome); else fatCartoesSel.add(nome); renderFaturas(); }
+function setFatSort(col){ if(fatSort.col===col) fatSort.dir*=-1; else fatSort={col:col,dir:1}; renderFaturas(); }
+function ordenarFatParcelas(arr){
+  const c=fatSort.col, dir=fatSort.dir;
+  const key=p=>{
+    if(c==='desc') return String(p.descricao||'').toUpperCase();
+    if(c==='grupo') return String(p.grupo||'').toUpperCase();
+    if(c==='valor') return p.valor||0;
+    const m=String(p.dataCompra||'').match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    return m? (m[3]+m[2]+m[1]) : '';
+  };
+  return arr.slice().sort((a,b)=>{ const ka=key(a),kb=key(b); if(ka<kb)return -dir; if(ka>kb)return dir; return 0; });
+}
+function fatCartoesSelecionados(){
+  const cards=cardsFaturaPerfil(); renderFatCartoesSel();
+  return [...(fatCartoesSel||new Set())].filter(n=>cards.some(c=>c.Nome===n));
+}
 function renderFaturas(){
-  const sel=document.getElementById('fatCartao'); if(!sel) return;
-  const cards=DB.cartoes.filter(c=>passaPerfil(c.Perfil));
-  const atual=sel.value;
-  sel.innerHTML = cards.length? cards.map(c=>opt(c.Nome, atual||cards[0].Nome)).join('') : '<option value="">(sem cartões)</option>';
-  const resumo=document.getElementById('faturaResumo'), tbl=document.getElementById('faturaTbl'), acao=document.getElementById('faturaAcao');
-  if(!cards.length){ resumo.innerHTML=''; tbl.innerHTML='<div class="vazio">Cadastre um cartão primeiro.</div>'; acao.innerHTML=''; return; }
-  const cardName=sel.value;
+  const cards=cardsFaturaPerfil();
+  const resumo=document.getElementById('faturaResumo'), tbl=document.getElementById('faturaTbl'), acao=document.getElementById('faturaAcao'), chart=document.getElementById('faturaChart');
+  if(!tbl) return;
+  renderFatCartoesSel();
+  if(!cards.length){ resumo.innerHTML=''; tbl.innerHTML='<div class="vazio">Cadastre um cartão primeiro.</div>'; acao.innerHTML=''; if(chart) chart.innerHTML=''; return; }
+  const sel=[...(fatCartoesSel||new Set())].filter(n=>cards.some(c=>c.Nome===n));
   const compEl=document.getElementById('fatComp'); if(!/^\d{4}-\d{2}$/.test(compEl.value)) compEl.value=compAtual();
   const comp=compEl.value;
-  const parcelas=faturaParcelas(cardName,comp), ajustes=faturaAjustes(cardName,comp), pagtos=faturaPagamentos(cardName,comp);
-  const total=faturaTotal(cardName,comp), pago=faturaPago(cardName,comp), falta=total-pago;
-  resumo.innerHTML = card3('Total da fatura — '+compLabel(comp),brl(total)) + card3('Pago',brl(pago)) + card3('Falta',brl(Math.max(0,falta)));
+  if(!sel.length){ resumo.innerHTML=''; tbl.innerHTML='<div class="vazio">Selecione ao menos um cartão acima.</div>'; acao.innerHTML=''; if(chart) chart.innerHTML=''; return; }
+  let parcelas=[], ajustes=[], pagtos=[], total=0, pago=0;
+  sel.forEach(cn=>{
+    faturaParcelas(cn,comp).forEach(p=>parcelas.push(Object.assign({cartao:cn},p)));
+    faturaAjustes(cn,comp).forEach(a=>ajustes.push(a));
+    faturaPagamentos(cn,comp).forEach(p=>pagtos.push(p));
+    total+=faturaTotal(cn,comp); pago+=faturaPago(cn,comp);
+  });
+  const falta=total-pago, multi=sel.length>1;
+  resumo.innerHTML = card3('Total — '+compLabel(comp),brl(total)) + card3('Pago',brl(pago)) + card3('Falta',brl(Math.max(0,falta)));
+  parcelas=ordenarFatParcelas(parcelas);
+  const seta=col=>'<span class="seta">'+(fatSort.col===col?(fatSort.dir>0?'▲':'▼'):'↕')+'</span>';
   let h='';
-  if(!parcelas.length && !ajustes.length){ h='<div class="vazio">Nenhuma compra vence em '+compLabel(comp)+' nesse cartão.</div>'; }
+  if(!parcelas.length && !ajustes.length){ h='<div class="vazio">Nenhuma compra vence em '+compLabel(comp)+' nos cartões selecionados.</div>'; }
   else {
-    h='<table><thead><tr><th>Descrição</th><th>Grupo</th><th>Compra (gasto)</th><th class="num">Valor</th></tr></thead><tbody>';
-    parcelas.forEach(p=>{ h+='<tr><td>'+esc(p.descricao)+'</td><td>'+esc(p.grupo)+'</td><td class="mono">'+esc(p.dataCompra)+'</td><td class="num">'+brl(p.valor)+'</td></tr>'; });
-    ajustes.forEach(a=>{ h+='<tr><td>'+esc(a.Descricao)+' <span style="color:#D97706;font-size:10px;font-weight:700">AJUSTE</span></td><td>'+esc(a.Grupo)+'</td><td>—</td><td class="num">'+brl(parseValor(a.Valor))+' <button class="btn-ic" onclick=\'excluirRegRaw("Movimentos",'+JSON.stringify(a.ID)+')\' title="Remover ajuste">🗑️</button></td></tr>'; });
-    pagtos.forEach(p=>{ h+='<tr style="background:#F0FDF4"><td>↳ '+esc(p.Descricao||'Pagamento')+'</td><td>'+esc(p.Conta||'')+'</td><td class="mono">'+esc(p.Data||'')+'</td><td class="num" style="color:#15803D">−'+brl(parseValor(p.Valor))+' <button class="btn-ic" onclick=\'excluirRegRaw("Movimentos",'+JSON.stringify(p.ID)+')\' title="Estornar pagamento">🗑️</button></td></tr>'; });
+    h='<table><thead><tr>'
+      +(multi?'<th>Cartão</th>':'')
+      +'<th class="sortable" onclick="setFatSort(\'desc\')">Descrição '+seta('desc')+'</th>'
+      +'<th class="sortable" onclick="setFatSort(\'grupo\')">Grupo '+seta('grupo')+'</th>'
+      +'<th class="sortable" onclick="setFatSort(\'data\')">Data da compra '+seta('data')+'</th>'
+      +'<th class="num sortable" onclick="setFatSort(\'valor\')">Valor '+seta('valor')+'</th></tr></thead><tbody>';
+    parcelas.forEach(p=>{ h+='<tr>'+(multi?'<td style="font-size:11px;color:#5B6B63">'+esc(p.cartao)+'</td>':'')+'<td>'+esc(p.descricao)+'</td><td>'+esc(p.grupo)+'</td><td class="mono">'+esc(p.dataCompra)+'</td><td class="num">'+brl(p.valor)+'</td></tr>'; });
+    ajustes.forEach(a=>{ h+='<tr>'+(multi?'<td style="font-size:11px;color:#5B6B63">'+esc(a.Conta||'')+'</td>':'')+'<td>'+esc(a.Descricao)+' <span style="color:#D97706;font-size:10px;font-weight:700">AJUSTE</span></td><td>'+esc(a.Grupo)+'</td><td>—</td><td class="num">'+brl(parseValor(a.Valor))+' <button class="btn-ic" onclick=\'excluirRegRaw("Movimentos",'+JSON.stringify(a.ID)+')\' title="Remover ajuste">🗑️</button></td></tr>'; });
+    pagtos.forEach(p=>{ h+='<tr style="background:#F0FDF4">'+(multi?'<td></td>':'')+'<td>↳ '+esc(p.Descricao||'Pagamento')+'</td><td>'+esc(p.Conta||'')+'</td><td class="mono">'+esc(p.Data||'')+'</td><td class="num" style="color:#15803D">−'+brl(parseValor(p.Valor))+' <button class="btn-ic" onclick=\'excluirRegRaw("Movimentos",'+JSON.stringify(p.ID)+')\' title="Estornar pagamento">🗑️</button></td></tr>'; });
     h+='</tbody></table>';
   }
   tbl.innerHTML=h;
-  if(falta>0.005){
-    acao.innerHTML='<div style="text-align:right"><button class="btn green" onclick=\'abrirPagarFatura('+JSON.stringify(cardName)+','+JSON.stringify(comp)+')\'>Pagar fatura — falta '+brl(falta)+'</button></div>';
-  } else if(total>0){ acao.innerHTML='<div style="text-align:right"><span class="pill p-pago">Fatura paga</span></div>'; }
-  else acao.innerHTML='';
+  let ah='';
+  sel.forEach(cn=>{ const f=faturaFalta(cn,comp); if(f>0.005){ ah+='<button class="btn green" style="margin:0 0 8px 8px" onclick=\'abrirPagarFatura('+JSON.stringify(cn)+','+JSON.stringify(comp)+')\'>Pagar '+esc(cn)+' — falta '+brl(f)+'</button>'; } });
+  acao.innerHTML = ah? '<div style="text-align:right">'+ah+'</div>' : (total>0? '<div style="text-align:right"><span class="pill p-pago">Faturas pagas</span></div>':'');
+  if(chart) chart.innerHTML=renderFaturaChart(sel);
+}
+// meses (competências) em que um cartão tem fatura (parcelas + ajustes)
+function faturaMesesCartao(card){
+  const meses=new Set();
+  DB.compras.filter(c=>c.Cartao===card).forEach(c=>{
+    const qtd=Math.max(1,parseInt(c.QtdParcelas)||1), jp=Math.min(qtd,Math.max(0,parseInt(c.ParcelasPagas)||0));
+    const ini=c.CompetenciaInicial||compDeData(c.DataCompra);
+    for(let k=jp;k<qtd;k++) meses.add(compAdd(ini,k));
+  });
+  DB.movimentos.forEach(m=>{ if(String(m.Ref||'').indexOf('FAT:'+card+':')===0){ const c=String(m.Ref).split(':')[2]; if(c) meses.add(c); } });
+  return meses;
+}
+function renderFaturaChart(sel){
+  const all=new Set(); sel.forEach(cn=>faturaMesesCartao(cn).forEach(m=>all.add(m)));
+  let meses=[...all].filter(m=>/^\d{4}-\d{2}$/.test(m)).sort();
+  if(meses.length<2) return '<div style="font-size:11.5px;color:#5B6B63">O histórico em gráfico aparece quando houver 2+ meses com faturas.</div>';
+  if(meses.length>30) meses=meses.slice(0,30);
+  const cores=['#2E5FA3','#DB2777','#16A34A','#D97706','#7C3AED','#0891B2','#DC2626','#65A30D'];
+  const series=sel.map((cn,i)=>({nome:cn, cor:cores[i%cores.length], valores:meses.map(m=>faturaTotal(cn,m))}));
+  return '<div style="font-size:11px;font-weight:700;color:#5B6B63;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Histórico das faturas</div>'
+       + svgLinhas(series, meses.map(compLabel));
+}
+// Gráfico de linhas em SVG puro. series=[{nome,cor,valores[]}], labels=[].
+function svgLinhas(series, labels){
+  const W=900, H=300, padL=70, padR=14, padT=14, padB=46, n=labels.length;
+  let max=0; series.forEach(s=>s.valores.forEach(v=>{ if(v>max) max=v; }));
+  if(max<=0) max=1;
+  const niceMax=Math.ceil(max/1000)*1000 || max;
+  const X=i=> padL + (n<=1?0:(i*(W-padL-padR)/(n-1)));
+  const Y=v=> H-padB - (v/niceMax)*(H-padT-padB);
+  let s='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;font-family:DM Sans,sans-serif">';
+  for(let g=0;g<=4;g++){ const val=niceMax*g/4, yy=Y(val); s+='<line x1="'+padL+'" y1="'+yy.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+yy.toFixed(1)+'" stroke="#E8EEEA"/>'; s+='<text x="'+(padL-7)+'" y="'+(yy+3).toFixed(1)+'" text-anchor="end" font-size="9" fill="#5B6B63">'+esc(brl(val))+'</text>'; }
+  const step=Math.max(1,Math.ceil(n/8));
+  labels.forEach((lb,i)=>{ if(i%step!==0 && i!==n-1) return; s+='<text x="'+X(i).toFixed(1)+'" y="'+(H-padB+16)+'" text-anchor="middle" font-size="9" fill="#5B6B63">'+esc(lb)+'</text>'; });
+  series.forEach(se=>{ let d=''; se.valores.forEach((v,i)=>{ d+=(i?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)+' '; });
+    s+='<path d="'+d+'" fill="none" stroke="'+se.cor+'" stroke-width="2"/>';
+    se.valores.forEach((v,i)=>{ if(v>0) s+='<circle cx="'+X(i).toFixed(1)+'" cy="'+Y(v).toFixed(1)+'" r="2.4" fill="'+se.cor+'"/>'; });
+  });
+  s+='</svg>';
+  const leg='<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:6px;font-size:11.5px;color:#3F4F48">'+series.map(se=>'<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:14px;height:3px;background:'+se.cor+';display:inline-block;border-radius:2px"></span>'+esc(se.nome)+'</span>').join('')+'</div>';
+  return s+leg;
 }
 function abrirAjusteFatura(){
   if(consolidado()){ alert('Selecione um perfil (João ou Lívia).'); return; }
-  const cardName=document.getElementById('fatCartao').value;
+  const cards=cardsFaturaPerfil();
+  if(!cards.length){ alert('Cadastre um cartão primeiro.'); return; }
+  const selc=fatCartoesSelecionados(); const padrao=selc[0]||cards[0].Nome;
   const comp=document.getElementById('fatComp').value||compAtual();
-  if(!cardName){ alert('Selecione um cartão.'); return; }
-  document.getElementById('modalT').textContent='Ajuste de fatura — '+cardName+' · '+compLabel(comp);
+  document.getElementById('modalT').textContent='Ajuste de fatura — '+compLabel(comp);
   document.getElementById('modalC').innerHTML =
     '<div style="font-size:12px;color:#5B6B63;margin-bottom:10px">Some (ou subtraia) um valor para a fatura bater com o valor do cartão. Entra no caixa nesse mês.</div>'
-   +'<div class="grid full">'+fld('Descrição','<input id="aj-desc" placeholder="Ex.: Juros / rotativo / compra que não entrou">')+'</div>'
    +'<div class="grid">'
-     +fld('Valor (R$ — use negativo para abater)','<input id="aj-valor" inputmode="decimal" placeholder="ex.: 120,50 ou -50">')
+     +fld('Cartão','<select id="aj-cartao">'+cards.map(c=>opt(c.Nome,padrao)).join('')+'</select>')
      +fld('Grupo','<select id="aj-grupo">'+GRUPOS_SAIDA.map(g=>opt(g,'AJUSTE CARTÃO')).join('')+'</select>')
    +'</div>'
+   +'<div class="grid full">'+fld('Descrição','<input id="aj-desc" placeholder="Ex.: Juros / rotativo / compra que não entrou">')+'</div>'
+   +'<div class="grid full">'+fld('Valor (R$ — use negativo para abater)','<input id="aj-valor" inputmode="decimal" placeholder="ex.: 120,50 ou -50">')+'</div>'
    +'<label style="display:flex;gap:8px;align-items:flex-start;font-size:11.5px;color:#5B6B63;margin:2px 2px 4px"><input type="checkbox" id="aj-mig" style="margin-top:2px"><span><b>Migração</b> — o gasto já aconteceu antes; contar só no caixa (entra na fatura/banco neste mês, mas fica fora do regime de gasto). Marque ao trazer parcelamentos antigos.</span></label>'
    +'<div class="acoes"><button class="btn-ghost" onclick="fecharModal()">Cancelar</button><button class="btn green" id="aj-save" onclick="salvarAjusteFatura()">Adicionar ajuste</button></div>';
   abrirModal();
 }
 async function salvarAjusteFatura(){
-  const cardName=document.getElementById('fatCartao').value;
+  const cardName=document.getElementById('aj-cartao').value;
   const comp=document.getElementById('fatComp').value||compAtual();
   const desc=document.getElementById('aj-desc').value.trim()||'Ajuste de fatura';
   const valor=parseValor(document.getElementById('aj-valor').value);
