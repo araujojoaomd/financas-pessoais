@@ -192,21 +192,21 @@ th.sortable .seta{opacity:.55;font-size:10px}
 <div class="layout">
 <aside class="sidebar" id="sidebar">
   <button class="side-toggle" onclick="toggleSidebar()" title="Recolher / expandir menu">☰</button>
-  <div class="side-h">Visões</div>
+  <div class="side-h">Movimento</div>
   <button class="side-item on" data-view="mes" onclick="setView('mes')"><span class="si-ic">📅</span><span class="si-lbl">Controle do Mês</span></button>
-  <button class="side-item" data-view="fluxo" onclick="setView('fluxo')"><span class="si-ic">📊</span><span class="si-lbl">Projeção de FC</span></button>
   <button class="side-item" data-view="faturas" onclick="setView('faturas')"><span class="si-ic">🧾</span><span class="si-lbl">Cartão de Crédito</span></button>
-  <div class="side-h">Receitas</div>
-  <button class="side-item" data-view="lancreceita" onclick="setView('lancreceita')"><span class="si-ic">💵</span><span class="si-lbl">Lançar Receita</span></button>
-  <button class="side-item" data-view="recreceitas" onclick="setView('recreceitas')"><span class="si-ic">🔁</span><span class="si-lbl">Receitas Recorrentes</span></button>
-  <div class="side-h">Pagamentos/Compras</div>
-  <button class="side-item" data-view="lancpagamento" onclick="setView('lancpagamento')"><span class="si-ic">💸</span><span class="si-lbl">Lançar Pagamento</span></button>
-  <button class="side-item" data-view="cartoes" onclick="setView('cartoes')"><span class="si-ic">🛒</span><span class="si-lbl">Compras no Cartão</span></button>
-  <button class="side-item" data-view="recpagamentos" onclick="setView('recpagamentos')"><span class="si-ic">🔁</span><span class="si-lbl">Pagamentos Recorrentes</span></button>
+  <div class="side-h">Análise / Relatório</div>
+  <button class="side-item" data-view="fluxo" onclick="setView('fluxo')"><span class="si-ic">📊</span><span class="si-lbl">Projeção de FC</span></button>
   <div class="side-h">Situação</div>
+  <button class="side-item" data-view="recreceitas" onclick="setView('recreceitas')"><span class="si-ic" style="color:#16A34A;font-weight:800">↑</span><span class="si-lbl">Entradas Recorrentes</span></button>
+  <button class="side-item" data-view="recpagamentos" onclick="setView('recpagamentos')"><span class="si-ic" style="color:#DC2626;font-weight:800">↓</span><span class="si-lbl">Saídas Recorrentes</span></button>
   <button class="side-item" data-view="emprestimos" onclick="setView('emprestimos')"><span class="si-ic">🏦</span><span class="si-lbl">Empréstimos</span></button>
   <button class="side-item" data-view="extrato" onclick="setView('extrato')"><span class="si-ic">📄</span><span class="si-lbl">Extrato Bancário</span></button>
-  <button class="side-item" data-view="movimentos" onclick="setView('movimentos')"><span class="si-ic">📋</span><span class="si-lbl">Histórico</span></button>
+  <div class="side-h">Histórico</div>
+  <button class="side-item" data-view="lancreceita" onclick="setView('lancreceita')"><span class="si-ic">💵</span><span class="si-lbl">Lançar Receita</span></button>
+  <button class="side-item" data-view="lancpagamento" onclick="setView('lancpagamento')"><span class="si-ic">💸</span><span class="si-lbl">Lançar Pagamento</span></button>
+  <button class="side-item" data-view="cartoes" onclick="setView('cartoes')"><span class="si-ic">🛒</span><span class="si-lbl">Compras no Cartão</span></button>
+  <button class="side-item" data-view="movimentos" onclick="setView('movimentos')"><span class="si-ic">📋</span><span class="si-lbl">Movimentos</span></button>
   <div class="side-h">Cadastros</div>
   <button class="side-item" data-view="contas" onclick="setView('contas')"><span class="si-ic">🏛️</span><span class="si-lbl">Contas Bancárias</span></button>
   <button class="side-item" data-view="cartoescad" onclick="setView('cartoescad')"><span class="si-ic">💳</span><span class="si-lbl">Cartões de Crédito</span></button>
@@ -297,7 +297,7 @@ th.sortable .seta{opacity:.55;font-size:10px}
       <button class="btn green" onclick="abrirMovimento(null,null,'ENTRADA')">+ Nova receita</button>
     </div>
     <div class="tbl-wrap"><div id="lancRecTbl"></div></div>
-    <p style="font-size:11.5px;color:#5B6B63;margin-top:10px">Receita que entrou (ou vai entrar) fora dos recorrentes — reembolso, venda, extra. Para salário e rendas fixas use <b>Receitas Recorrentes</b>.</p>
+    <p style="font-size:11.5px;color:#5B6B63;margin-top:10px">Receita que entrou (ou vai entrar) fora dos recorrentes — reembolso, venda, extra. Para salário e rendas fixas use <b>Entradas Recorrentes</b>.</p>
   </div>
 
   <!-- LANÇAR PAGAMENTO (avulso) -->
@@ -308,13 +308,13 @@ th.sortable .seta{opacity:.55;font-size:10px}
       <button class="btn green" onclick="abrirMovimento(null,null,'SAÍDA')">+ Novo pagamento</button>
     </div>
     <div class="tbl-wrap"><div id="lancPagTbl"></div></div>
-    <p style="font-size:11.5px;color:#5B6B63;margin-top:10px">Pagamento avulso pago direto de uma conta. Para contas fixas mensais use <b>Pagamentos Recorrentes</b>; para cartão use <b>Compras no Cartão</b>.</p>
+    <p style="font-size:11.5px;color:#5B6B63;margin-top:10px">Pagamento avulso pago direto de uma conta. Para contas fixas mensais use <b>Saídas Recorrentes</b>; para cartão use <b>Compras no Cartão</b>.</p>
   </div>
 
   <!-- RECEITAS RECORRENTES -->
   <div class="view" id="v-recreceitas">
     <div class="toolbar">
-      <h2>Receitas recorrentes</h2>
+      <h2>Entradas Recorrentes</h2>
       <div class="sep"></div>
       <button class="btn green" onclick="abrirRecorrente(null,'ENTRADA')">+ Nova receita recorrente</button>
     </div>
@@ -325,7 +325,7 @@ th.sortable .seta{opacity:.55;font-size:10px}
   <!-- PAGAMENTOS RECORRENTES -->
   <div class="view" id="v-recpagamentos">
     <div class="toolbar">
-      <h2>Pagamentos recorrentes</h2>
+      <h2>Saídas Recorrentes</h2>
       <div class="sep"></div>
       <button class="btn green" onclick="abrirRecorrente(null,'SAÍDA')">+ Novo pagamento recorrente</button>
     </div>
