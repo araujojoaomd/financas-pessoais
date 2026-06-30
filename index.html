@@ -195,6 +195,7 @@ th.sortable .seta{opacity:.55;font-size:10px}
   <div class="side-h">Visões</div>
   <button class="side-item on" data-view="mes" onclick="setView('mes')"><span class="si-ic">📅</span><span class="si-lbl">Controle do Mês</span></button>
   <button class="side-item" data-view="fluxo" onclick="setView('fluxo')"><span class="si-ic">📊</span><span class="si-lbl">Projeção de FC</span></button>
+  <button class="side-item" data-view="faturas" onclick="setView('faturas')"><span class="si-ic">🧾</span><span class="si-lbl">Cartão de Crédito</span></button>
   <div class="side-h">Receitas</div>
   <button class="side-item" data-view="lancreceita" onclick="setView('lancreceita')"><span class="si-ic">💵</span><span class="si-lbl">Lançar Receita</span></button>
   <button class="side-item" data-view="recreceitas" onclick="setView('recreceitas')"><span class="si-ic">🔁</span><span class="si-lbl">Receitas Recorrentes</span></button>
@@ -204,7 +205,6 @@ th.sortable .seta{opacity:.55;font-size:10px}
   <button class="side-item" data-view="recpagamentos" onclick="setView('recpagamentos')"><span class="si-ic">🔁</span><span class="si-lbl">Pagamentos Recorrentes</span></button>
   <div class="side-h">Situação</div>
   <button class="side-item" data-view="emprestimos" onclick="setView('emprestimos')"><span class="si-ic">🏦</span><span class="si-lbl">Empréstimos</span></button>
-  <button class="side-item" data-view="faturas" onclick="setView('faturas')"><span class="si-ic">🧾</span><span class="si-lbl">Faturas dos Cartões</span></button>
   <button class="side-item" data-view="extrato" onclick="setView('extrato')"><span class="si-ic">📄</span><span class="si-lbl">Extrato Bancário</span></button>
   <button class="side-item" data-view="movimentos" onclick="setView('movimentos')"><span class="si-ic">📋</span><span class="si-lbl">Histórico</span></button>
   <div class="side-h">Cadastros</div>
@@ -273,11 +273,12 @@ th.sortable .seta{opacity:.55;font-size:10px}
   <!-- FATURAS -->
   <div class="view" id="v-faturas">
     <div class="toolbar">
-      <h2>Faturas dos cartões</h2>
+      <h2>Cartão de Crédito</h2>
       <button class="btn-ghost" onclick="mudarFatura(-1)">‹ anterior</button>
       <input class="flt" id="fatComp" style="width:120px;text-align:center" onchange="renderFaturas()">
       <button class="btn-ghost" onclick="mudarFatura(1)">próxima ›</button>
       <div class="sep"></div>
+      <button class="btn green" onclick="abrirLancCartao()">+ Novo lançamento no cartão</button>
       <button class="btn-ghost" onclick="abrirAjusteFatura()">+ Ajuste</button>
     </div>
     <div id="fatCartoes" style="padding:4px 2px 12px"></div>
