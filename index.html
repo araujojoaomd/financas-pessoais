@@ -185,26 +185,26 @@ th.sortable .seta{opacity:.55;font-size:10px}
 <div class="tabs"><div class="tabs-in" id="tabsIn">
   <span class="qa-label">Acesso rápido</span>
   <button class="tab on" data-view="mes" onclick="setView('mes')">Mês</button>
-  <button class="tab" data-view="fluxo" onclick="setView('fluxo')">Projeção de FC</button>
+  <button class="tab" data-view="fluxo" onclick="setView('fluxo')">Fluxo de Caixa</button>
   <button class="tab" data-view="cartoes" onclick="setView('cartoes')">Compras no cartão</button>
 </div></div>
 
 <div class="layout">
 <aside class="sidebar" id="sidebar">
   <button class="side-toggle" onclick="toggleSidebar()" title="Recolher / expandir menu">☰</button>
-  <div class="side-h">Movimento</div>
+  <div class="side-h">Controle</div>
   <button class="side-item on" data-view="mes" onclick="setView('mes')"><span class="si-ic">📅</span><span class="si-lbl">Controle do Mês</span></button>
-  <button class="side-item" data-view="faturas" onclick="setView('faturas')"><span class="si-ic">🧾</span><span class="si-lbl">Cartão de Crédito</span></button>
+  <button class="side-item" data-view="faturas" onclick="setView('faturas')"><span class="si-ic">💳</span><span class="si-lbl">Cartão de Crédito</span></button>
   <div class="side-h">Análise / Relatório</div>
-  <button class="side-item" data-view="fluxo" onclick="setView('fluxo')"><span class="si-ic">📊</span><span class="si-lbl">Projeção de FC</span></button>
+  <button class="side-item" data-view="fluxo" onclick="setView('fluxo')"><span class="si-ic">📊</span><span class="si-lbl">Fluxo de Caixa</span></button>
   <div class="side-h">Situação</div>
   <button class="side-item" data-view="recreceitas" onclick="setView('recreceitas')"><span class="si-ic" style="color:#16A34A;font-weight:800">↑</span><span class="si-lbl">Entradas Recorrentes</span></button>
   <button class="side-item" data-view="recpagamentos" onclick="setView('recpagamentos')"><span class="si-ic" style="color:#DC2626;font-weight:800">↓</span><span class="si-lbl">Saídas Recorrentes</span></button>
   <button class="side-item" data-view="emprestimos" onclick="setView('emprestimos')"><span class="si-ic">🏦</span><span class="si-lbl">Empréstimos</span></button>
   <button class="side-item" data-view="extrato" onclick="setView('extrato')"><span class="si-ic">📄</span><span class="si-lbl">Extrato Bancário</span></button>
   <div class="side-h">Histórico</div>
-  <button class="side-item" data-view="lancreceita" onclick="setView('lancreceita')"><span class="si-ic">💵</span><span class="si-lbl">Lançar Receita</span></button>
-  <button class="side-item" data-view="lancpagamento" onclick="setView('lancpagamento')"><span class="si-ic">💸</span><span class="si-lbl">Lançar Pagamento</span></button>
+  <button class="side-item" data-view="lancreceita" onclick="setView('lancreceita')"><span class="si-ic">📥</span><span class="si-lbl">Entradas Manuais</span></button>
+  <button class="side-item" data-view="lancpagamento" onclick="setView('lancpagamento')"><span class="si-ic">📤</span><span class="si-lbl">Saídas Manuais</span></button>
   <button class="side-item" data-view="cartoes" onclick="setView('cartoes')"><span class="si-ic">🛒</span><span class="si-lbl">Compras no Cartão</span></button>
   <button class="side-item" data-view="movimentos" onclick="setView('movimentos')"><span class="si-ic">📋</span><span class="si-lbl">Movimentos</span></button>
   <div class="side-h">Cadastros</div>
@@ -235,7 +235,7 @@ th.sortable .seta{opacity:.55;font-size:10px}
   <div class="view" id="v-fluxo">
     <div class="resumo" id="resumo"></div>
     <div class="toolbar">
-      <h2>Projeção de FC</h2>
+      <h2>Fluxo de Caixa</h2>
       <div class="pessoa-sel" style="background:#E3EAE6">
         <button class="on" id="reg-caixa" onclick="setRegime('CAIXA',this)" style="color:#0F3D2E">Caixa (desembolso)</button>
         <button id="reg-gasto" onclick="setRegime('GASTO',this)" style="color:#0F3D2E">Gasto (competência)</button>
@@ -292,7 +292,7 @@ th.sortable .seta{opacity:.55;font-size:10px}
   <!-- LANÇAR RECEITA (avulsa) -->
   <div class="view" id="v-lancreceita">
     <div class="toolbar">
-      <h2>Lançar receita</h2>
+      <h2>Entradas Manuais</h2>
       <div class="sep"></div>
       <button class="btn green" onclick="abrirMovimento(null,null,'ENTRADA')">+ Nova receita</button>
     </div>
@@ -303,7 +303,7 @@ th.sortable .seta{opacity:.55;font-size:10px}
   <!-- LANÇAR PAGAMENTO (avulso) -->
   <div class="view" id="v-lancpagamento">
     <div class="toolbar">
-      <h2>Lançar pagamento</h2>
+      <h2>Saídas Manuais</h2>
       <div class="sep"></div>
       <button class="btn green" onclick="abrirMovimento(null,null,'SAÍDA')">+ Novo pagamento</button>
     </div>
