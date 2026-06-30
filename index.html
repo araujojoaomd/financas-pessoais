@@ -190,7 +190,7 @@ th.sortable .seta{opacity:.55;font-size:10px}
 <div class="tabs"><div class="tabs-in" id="tabsIn">
   <span class="qa-label">Acesso rápido</span>
   <button class="tab on" data-view="mes" onclick="setView('mes')">Mês</button>
-  <button class="tab" data-view="fluxo" onclick="setView('fluxo')">Fluxo de Caixa</button>
+  <button class="tab" data-view="fluxo" onclick="setView('fluxo')">Projeção do Fluxo de Caixa</button>
   <button class="tab" data-view="cartoes" onclick="setView('cartoes')">Compras no cartão</button>
 </div></div>
 
@@ -199,7 +199,7 @@ th.sortable .seta{opacity:.55;font-size:10px}
   <button class="side-toggle" onclick="toggleSidebar()" title="Recolher / expandir menu">☰</button>
   <div class="side-h">Visões</div>
   <button class="side-item on" data-view="mes" onclick="setView('mes')"><span class="si-ic">📅</span><span class="si-lbl">Controle do Mês</span></button>
-  <button class="side-item" data-view="fluxo" onclick="setView('fluxo')"><span class="si-ic">📊</span><span class="si-lbl">Fluxo de Caixa</span></button>
+  <button class="side-item" data-view="fluxo" onclick="setView('fluxo')"><span class="si-ic">📊</span><span class="si-lbl">Projeção do Fluxo de Caixa</span></button>
   <div class="side-h">Receitas</div>
   <button class="side-item" data-view="lancreceita" onclick="setView('lancreceita')"><span class="si-ic">💵</span><span class="si-lbl">Lançar Receita</span></button>
   <button class="side-item" data-view="recreceitas" onclick="setView('recreceitas')"><span class="si-ic">🔁</span><span class="si-lbl">Receitas Recorrentes</span></button>
@@ -240,7 +240,7 @@ th.sortable .seta{opacity:.55;font-size:10px}
   <div class="view" id="v-fluxo">
     <div class="resumo" id="resumo"></div>
     <div class="toolbar">
-      <h2>Fluxo por grupo</h2>
+      <h2>Projeção do Fluxo de Caixa</h2>
       <div class="pessoa-sel" style="background:#E3EAE6">
         <button class="on" id="reg-caixa" onclick="setRegime('CAIXA',this)" style="color:#0F3D2E">Caixa (desembolso)</button>
         <button id="reg-gasto" onclick="setRegime('GASTO',this)" style="color:#0F3D2E">Gasto (competência)</button>
@@ -962,13 +962,14 @@ function linhaMes(l,i){
   }
   return '<tr><td>'+esc(l.descricao)+'</td><td>'+esc(l.grupo)+'</td><td>'+pill(l.perfil)+'</td><td class="num">'+brl(l.valor)+'</td><td>'+statusCell+'</td><td>'+acaoCell+'</td></tr>';
 }
+function secaoMes(t,bg,fg){ return '<div style="background:'+bg+';color:'+fg+';font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.7px;padding:9px 14px;border-radius:10px;margin:16px 0 8px">'+esc(t)+'</div>'; }
 function caixaMes(chave, itens, cor, rotulo){
   if(!itens.length) return '';
   rotulo = rotulo || chave;
   const total=itens.reduce((s,l)=>s+l.valor,0);
   const feitos=itens.filter(l=>(l.status||'PREVISTO').toUpperCase()!=='PREVISTO').length;
   const aberto = mesGruposAbertos[chave]!==false;
-  let h='<div class="grp-box"><div class="grp-head" onclick=\'toggleGrupoMes('+JSON.stringify(chave)+')\'>'
+  let h='<div class="grp-box"><div class="grp-head" style="background:#FEF6E0" onclick=\'toggleGrupoMes('+JSON.stringify(chave)+')\'>'
     +'<span class="grp-chev">'+(aberto?'▾':'▸')+'</span><span class="grp-nome">'+esc(rotulo)+'</span>'
     +'<span class="grp-cont">'+feitos+'/'+itens.length+'</span>'
     +'<span class="grp-tot" style="color:'+cor+'">'+brl(total)+'</span></div>';
@@ -1058,7 +1059,7 @@ function caixaMesFaturas(faturas, comp){
   if(!faturas.length) return '';
   const total=faturas.reduce((s,f)=>s+f.total,0), falta=faturas.reduce((s,f)=>s+Math.max(0,f.falta),0);
   const aberto = mesGruposAbertos['Cartão']!==false;
-  let h='<div class="grp-box"><div class="grp-head" onclick="toggleGrupoMes(\'Cartão\')">'
+  let h='<div class="grp-box"><div class="grp-head" style="background:#FEF6E0" onclick="toggleGrupoMes(\'Cartão\')">'
     +'<span class="grp-chev">'+(aberto?'▾':'▸')+'</span><span class="grp-nome">Cartões</span>'
     +'<span class="grp-cont">falta '+brl(falta)+'</span>'
     +'<span class="grp-tot" style="color:#DC2626">'+brl(total)+'</span></div>';
@@ -1097,7 +1098,8 @@ function renderMes(){
   const LABEL_MES={'Recorrentes':'Pagamentos Recorrentes','Pagamentos/Compras':'Outros Pagamentos','Empréstimos':'Empréstimos'};
   const gs={}; ordem.forEach(g=>gs[g]=[]);
   saidas.forEach(l=>{ gs[grupoOrigemSaida(l.origem)].push(l); });
-  let h = caixaMesEntradas(entradas);
+  let h = secaoMes('ENTRADAS','#DCFCE7','#166534') + caixaMesEntradas(entradas);
+  h += secaoMes('SAÍDAS','#FEF0CD','#B45309');
   h += caixaMesFaturas(faturas, comp);
   ordem.forEach(g=>{ h += caixaMes(g, gs[g], '#DC2626', LABEL_MES[g]); });
   document.getElementById('mesTbl').innerHTML = h;
@@ -1203,15 +1205,16 @@ function renderFluxo(){
   let cg='<colgroup><col>'; comps.forEach(cp=>cg+='<col'+(cp===mAtual?' class="col-atual"':'')+'>'); cg+='</colgroup>';
   let h='<table class="matriz">'+cg+'<thead><tr><th class="grupo">Grupo</th>';
   comps.forEach(cp=>h+='<th class="num'+(cp===mAtual?' col-atual':'')+'">'+compLabel(cp)+'</th>'); h+='</tr></thead><tbody>';
-  // RECEITAS (por grupo)
-  h+=linhaSecao('RECEITAS',comps);
+  // ENTRADAS (por grupo) — espelha o Controle Mês
+  h+=linhaSecao('ENTRADAS',comps);
   Object.keys(rec).sort().forEach(g=>{ h+='<tr class="rec-item"><td class="grupo">'+esc(g)+'</td>'+comps.map(cp=>celula(rec[g][cp],cp)).join('')+'</tr>'; });
-  // DESPESAS (agrupadas por origem, colapsáveis)
-  h+=linhaSecao('DESPESAS',comps);
-  ['Recorrentes','Pagamentos/Compras','Cartão','Empréstimos'].forEach(o=>{
+  // SAÍDAS (mesma organização do Mês: Cartões, Pagamentos Recorrentes, Outros Pagamentos, Empréstimos)
+  h+=linhaSecao('SAÍDAS',comps);
+  const LABEL_FLUXO={'Cartão':'Cartões','Recorrentes':'Pagamentos Recorrentes','Pagamentos/Compras':'Outros Pagamentos','Empréstimos':'Empréstimos'};
+  ['Cartão','Recorrentes','Pagamentos/Compras','Empréstimos'].forEach(o=>{
     if(!despSub[o] || !Object.keys(despSub[o]).length) return;
     const aberto = fluxoGruposAbertos[o]===true;
-    h+='<tr class="grp-origem" onclick=\'toggleFluxoGrupo('+JSON.stringify(o)+')\'><td class="grupo">'+(aberto?'▾ ':'▸ ')+esc(o)+'</td>'
+    h+='<tr class="grp-origem" onclick=\'toggleFluxoGrupo('+JSON.stringify(o)+')\'><td class="grupo">'+(aberto?'▾ ':'▸ ')+esc(LABEL_FLUXO[o]||o)+'</td>'
       +comps.map(cp=>celula(despSub[o][cp],cp)).join('')+'</tr>';
     if(aberto){
       Object.keys(desp[o]).sort().forEach(g=>{ h+='<tr class="grp-det"><td class="grupo">'+esc(g)+'</td>'+comps.map(cp=>celula(desp[o][g][cp],cp)).join('')+'</tr>'; });
@@ -1234,7 +1237,7 @@ function renderFluxo(){
     : '<b>Regime de caixa (desembolso):</b> a saída aparece no mês em que o dinheiro de fato sai — para cartão, no vencimento da fatura. É a lente que bate com o saldo do banco.';
 }
 function card(lbl,val,cls){ return '<div class="rcard"><div class="lbl">'+lbl+'</div><div class="val '+cls+'">'+val+'</div></div>'; }
-function linhaSecao(t,comps){ const cls = t==='RECEITAS'?'grp-h grp-h-rec':(t==='DESPESAS'?'grp-h grp-h-desp':'grp-h'); return '<tr class="'+cls+'"><td class="grupo">'+t+'</td><td colspan="'+comps.length+'"></td></tr>'; }
+function linhaSecao(t,comps){ const cls = t==='ENTRADAS'?'grp-h grp-h-rec':(t==='SAÍDAS'?'grp-h grp-h-desp':'grp-h'); return '<tr class="'+cls+'"><td class="grupo">'+t+'</td><td colspan="'+comps.length+'"></td></tr>'; }
 
 // ===== COMPRAS DE CARTÃO =====
 function renderCompras(){
