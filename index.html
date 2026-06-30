@@ -1193,22 +1193,23 @@ function renderFluxo(){
   const LABEL_FLUXO={'Cartão':'Cartões','Recorrentes':'Pagamentos Recorrentes','Pagamentos/Compras':'Outros Pagamentos','Empréstimos':'Empréstimos'};
   const grp={}; ORD.forEach(o=>grp[o]={});
   const cartaoCard={};                 // nome do cartão -> {comp:total}
+  const ehConf=l=>String(l.status||'PREVISTO').toUpperCase()!=='PREVISTO';
+  const acc=(obj,cp,l)=>{ const c=obj[cp]||(obj[cp]={t:0,c:0}); c.t+=l.valor; if(ehConf(l)) c.c+=l.valor; };
   lanc.forEach(l=>{
     if(!compSet.has(l.comp)) return;
-    if(l.tipo==='ENTRADA'){ entr[l.comp]=(entr[l.comp]||0)+l.valor; return; }
-    const o=grupoOrigemSaida(l.origem); grp[o][l.comp]=(grp[o][l.comp]||0)+l.valor;
-    if(o==='Cartão'){ const cn=l.conta||'(cartão)'; cartaoCard[cn]=cartaoCard[cn]||{}; cartaoCard[cn][l.comp]=(cartaoCard[cn][l.comp]||0)+l.valor; }
+    if(l.tipo==='ENTRADA'){ acc(entr,l.comp,l); return; }
+    const o=grupoOrigemSaida(l.origem); acc(grp[o],l.comp,l);
+    if(o==='Cartão'){ const cn=l.conta||'(cartão)'; cartaoCard[cn]=cartaoCard[cn]||{}; acc(cartaoCard[cn],l.comp,l); }
   });
-  // mapa de calor: fundo da célula por intensidade (valor / máximo da linha). Fonte normal.
-  const heatTd=(v,rowMax,cp)=>{ const a=(cp===mAtual?' col-atual':'');
-    if(!v) return '<td class="num'+a+'" style="color:#C2CDC7">—</td>';
-    const t=rowMax>0?Math.min(1,v/rowMax):0, k=t*0.72;
-    const r=Math.round(255-k*10), g=Math.round(255-k*97), b=Math.round(255-k*244);
-    return '<td class="num'+a+'" style="background:rgb('+r+','+g+','+b+')">'+brl(v)+'</td>'; };
+  // fundo da célula por status: realizado (verde) x previsto/a realizar (âmbar). Fonte normal.
+  const REAL_BG='#DCFCE7', PREV_BG='#FDEAC8';
+  const statusTd=(cell,cp)=>{ const a=(cp===mAtual?' col-atual':'');
+    if(!cell || !cell.t) return '<td class="num'+a+'" style="color:#C2CDC7">—</td>';
+    const real = cell.c>=cell.t-0.005;
+    return '<td class="num'+a+'" style="background:'+(real?REAL_BG:PREV_BG)+'">'+brl(cell.t)+'</td>'; };
   const linhaMatriz=(label,classe,valores,indent)=>{
-    const max=Math.max(0,...comps.map(cp=>valores[cp]||0));
     let r='<tr class="'+classe+'"><td class="grupo"'+(indent?' style="padding-left:30px;font-weight:400"':'')+'>'+esc(label)+'</td>';
-    r+=comps.map(cp=>heatTd(valores[cp]||0, max, cp)).join('');
+    r+=comps.map(cp=>statusTd(valores[cp], cp)).join('');
     return r+'</tr>'; };
 
   let cg='<colgroup><col>'; comps.forEach(cp=>cg+='<col'+(cp===mAtual?' class="col-atual"':'')+'>'); cg+='</colgroup>';
@@ -1240,7 +1241,7 @@ function renderFluxo(){
   h+='<tr class="liq"><td class="grupo">VALOR LÍQUIDO</td>'+comps.map(cp=>'<td class="num'+(cp===mAtual?' col-atual':'')+'">'+brl(liq[cp])+'</td>').join('')+'</tr>';
   h+='</tbody></table>';
   document.getElementById('fluxoTbl').innerHTML = h;
-  const legenda='<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:11.5px;color:#3F4F48">Mapa de calor (por linha): <span style="display:inline-block;width:120px;height:12px;border-radius:3px;background:linear-gradient(90deg,#fff,rgb(248,185,79));border:1px solid #E3EAE6"></span> menor → maior valor no mês</div>';
+  const legenda='<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:6px;font-size:11.5px;color:#3F4F48"><span style="display:inline-flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:3px;background:#DCFCE7;border:1px solid #BBE9CB;display:inline-block"></span>Realizado (confirmado)</span><span style="display:inline-flex;align-items:center;gap:6px"><span style="width:14px;height:14px;border-radius:3px;background:#FDEAC8;border:1px solid #F2D6A6;display:inline-block"></span>Previsto (a realizar)</span></div>';
   document.getElementById('fluxoNota').innerHTML = legenda + (regimeFluxo==='GASTO'
     ? '<b>Regime de gasto (competência):</b> o pagamento/compra aparece no mês em que você comprou/consumiu. Compra no cartão entra no mês da compra.'
     : '<b>Regime de caixa (desembolso):</b> a saída aparece no mês em que o dinheiro de fato sai — para cartão, no vencimento da fatura. É a lente que bate com o saldo do banco.');
