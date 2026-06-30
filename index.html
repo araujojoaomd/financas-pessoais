@@ -2148,7 +2148,7 @@ function renderFaturas(){
   let ah='';
   sel.forEach(cn=>{ const f=faturaFalta(cn,comp); if(f>0.005){ ah+='<button class="btn green" style="margin:0 0 8px 8px" onclick=\'abrirPagarFatura('+JSON.stringify(cn)+','+JSON.stringify(comp)+')\'>Pagar '+esc(cn)+' — falta '+brl(f)+'</button>'; } });
   acao.innerHTML = ah? '<div style="text-align:right">'+ah+'</div>' : (total>0? '<div style="text-align:right"><span class="pill p-pago">Faturas pagas</span></div>':'');
-  if(chart) chart.innerHTML=renderFaturaChart(sel);
+  if(chart){ chart.innerHTML=renderFaturaChart(sel); const sc=chart.querySelector('.fat-chart-scroll'); if(sc) sc.scrollLeft=+(sc.dataset.scroll||0); }
 }
 // meses (competências) em que um cartão tem fatura (parcelas + ajustes)
 function faturaMesesCartao(card){
@@ -2165,31 +2165,37 @@ function renderFaturaChart(sel){
   const all=new Set(); sel.forEach(cn=>faturaMesesCartao(cn).forEach(m=>all.add(m)));
   let meses=[...all].filter(m=>/^\d{4}-\d{2}$/.test(m)).sort();
   if(meses.length<2) return '<div style="font-size:11.5px;color:#5B6B63">O histórico em gráfico aparece quando houver 2+ meses com faturas.</div>';
-  if(meses.length>30) meses=meses.slice(0,30);
-  const cores=['#2E5FA3','#DB2777','#16A34A','#D97706','#7C3AED','#0891B2','#DC2626','#65A30D'];
+  if(meses.length>60) meses=meses.slice(0,60);
+  const cores=['#2E5FA3','#DB2777','#D97706','#7C3AED','#0891B2','#DC2626','#65A30D','#0D9488'];
   const series=sel.map((cn,i)=>({nome:cn, cor:cores[i%cores.length], valores:meses.map(m=>faturaTotal(cn,m))}));
+  if(sel.length>1) series.push({nome:'TOTAL (todos)', cor:'#0F3D2E', total:true, valores:meses.map(m=>sel.reduce((s,cn)=>s+faturaTotal(cn,m),0))});
   return '<div style="font-size:11px;font-weight:700;color:#5B6B63;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Histórico das faturas</div>'
-       + svgLinhas(series, meses.map(compLabel));
+       + svgLinhas(series, meses);
 }
-// Gráfico de linhas em SVG puro. series=[{nome,cor,valores[]}], labels=[].
-function svgLinhas(series, labels){
-  const W=900, H=300, padL=70, padR=14, padT=14, padB=46, n=labels.length;
+// Gráfico de linhas em SVG. series=[{nome,cor,valores[],total?}], meses=['AAAA-MM',...].
+// Todos os meses no eixo X; largura fixa por mês + rolagem horizontal; linha vertical no mês atual.
+function svgLinhas(series, meses){
+  const n=meses.length, perMes=64, padL=72, padR=22, padT=16, padB=48, H=300;
+  const W=padL+padR+Math.max(1,(n-1))*perMes;
   let max=0; series.forEach(s=>s.valores.forEach(v=>{ if(v>max) max=v; }));
   if(max<=0) max=1;
   const niceMax=Math.ceil(max/1000)*1000 || max;
-  const X=i=> padL + (n<=1?0:(i*(W-padL-padR)/(n-1)));
+  const X=i=> padL + i*perMes;
   const Y=v=> H-padB - (v/niceMax)*(H-padT-padB);
-  let s='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;font-family:DM Sans,sans-serif">';
+  const mAtual=compAtual(), idxAtual=meses.indexOf(mAtual);
+  let s='<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" style="font-family:DM Sans,sans-serif;display:block">';
   for(let g=0;g<=4;g++){ const val=niceMax*g/4, yy=Y(val); s+='<line x1="'+padL+'" y1="'+yy.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+yy.toFixed(1)+'" stroke="#E8EEEA"/>'; s+='<text x="'+(padL-7)+'" y="'+(yy+3).toFixed(1)+'" text-anchor="end" font-size="9" fill="#5B6B63">'+esc(brl(val))+'</text>'; }
-  const step=Math.max(1,Math.ceil(n/8));
-  labels.forEach((lb,i)=>{ if(i%step!==0 && i!==n-1) return; s+='<text x="'+X(i).toFixed(1)+'" y="'+(H-padB+16)+'" text-anchor="middle" font-size="9" fill="#5B6B63">'+esc(lb)+'</text>'; });
-  series.forEach(se=>{ let d=''; se.valores.forEach((v,i)=>{ d+=(i?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)+' '; });
-    s+='<path d="'+d+'" fill="none" stroke="'+se.cor+'" stroke-width="2"/>';
-    se.valores.forEach((v,i)=>{ if(v>0) s+='<circle cx="'+X(i).toFixed(1)+'" cy="'+Y(v).toFixed(1)+'" r="2.4" fill="'+se.cor+'"/>'; });
+  if(idxAtual>=0){ const xa=X(idxAtual); s+='<line x1="'+xa+'" y1="'+padT+'" x2="'+xa+'" y2="'+(H-padB)+'" stroke="#1F3864" stroke-width="1.5" stroke-dasharray="4 3"/>'; s+='<text x="'+xa+'" y="'+(padT+2)+'" text-anchor="middle" font-size="8.5" fill="#1F3864" font-weight="700">hoje</text>'; }
+  meses.forEach((m,i)=>{ const at=m===mAtual; s+='<text x="'+X(i)+'" y="'+(H-padB+16)+'" text-anchor="middle" font-size="9" fill="'+(at?'#1F3864':'#5B6B63')+'"'+(at?' font-weight="700"':'')+'>'+esc(compLabel(m))+'</text>'; });
+  series.forEach(se=>{ let d=''; se.valores.forEach((v,i)=>{ d+=(i?'L':'M')+X(i)+' '+Y(v).toFixed(1)+' '; });
+    s+='<path d="'+d+'" fill="none" stroke="'+se.cor+'" stroke-width="'+(se.total?3.2:2)+'"'+(se.total?'':' stroke-opacity="0.92"')+'/>';
+    se.valores.forEach((v,i)=>{ if(v>0) s+='<circle cx="'+X(i)+'" cy="'+Y(v).toFixed(1)+'" r="'+(se.total?3.4:2.8)+'" fill="'+se.cor+'"><title>'+esc(se.nome+' · '+compLabel(meses[i])+' · '+brl(v))+'</title></circle>'; });
   });
   s+='</svg>';
-  const leg='<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:6px;font-size:11.5px;color:#3F4F48">'+series.map(se=>'<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:14px;height:3px;background:'+se.cor+';display:inline-block;border-radius:2px"></span>'+esc(se.nome)+'</span>').join('')+'</div>';
-  return s+leg;
+  const leg='<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:11.5px;color:#3F4F48">'+series.map(se=>'<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:16px;height:'+(se.total?4:3)+'px;background:'+se.cor+';display:inline-block;border-radius:2px"></span>'+esc(se.nome)+'</span>').join('')+'</div>';
+  const alvo=Math.max(0, X(idxAtual>=0?idxAtual:0)-90);
+  return '<div class="fat-chart-scroll" data-scroll="'+alvo+'" style="overflow-x:auto;border:1px solid #EEF2F0;border-radius:10px;padding:10px 8px 4px">'+s+'</div>'+leg
+    +'<div style="font-size:10.5px;color:#8A968F;margin-top:4px">Passe o mouse nos pontos para ver cartão, competência e valor. Role para a direita pra ver meses futuros.</div>';
 }
 function abrirAjusteFatura(){
   if(consolidado()){ alert('Selecione um perfil (João ou Lívia).'); return; }
