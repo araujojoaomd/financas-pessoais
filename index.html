@@ -1251,12 +1251,23 @@ function card(lbl,val,cls){ return '<div class="rcard"><div class="lbl">'+lbl+'<
 function linhaSecao(t,comps){ const cls = t==='ENTRADAS'?'grp-h grp-h-rec':(t==='SAÍDAS'?'grp-h grp-h-desp':'grp-h'); return '<tr class="'+cls+'"><td class="grupo">'+t+'</td><td colspan="'+comps.length+'"></td></tr>'; }
 
 // ===== COMPRAS DE CARTÃO =====
+// ===== Ordenação genérica de tabelas (cabeçalho clicável com setas) =====
+const sortStates={};
+function getSort(key,defCol,defDir){ if(!sortStates[key]) sortStates[key]={col:defCol||'',dir:defDir||1}; return sortStates[key]; }
+function setSortGen(key,col,fn){ const s=sortStates[key]||(sortStates[key]={col:col,dir:1}); if(s.col===col) s.dir*=-1; else { s.col=col; s.dir=1; } fn(); }
+function setaSort(key,col){ const s=sortStates[key]; const cur=s&&s.col===col; return '<span class="seta">'+(cur?(s.dir>0?'▲':'▼'):'↕')+'</span>'; }
+function thSort(key,col,label,numCls,fnName){ return '<th class="'+(numCls?'num ':'')+'sortable" onclick=\'setSortGen('+JSON.stringify(key)+','+JSON.stringify(col)+','+fnName+')\'>'+esc(label)+' '+setaSort(key,col)+'</th>'; }
+function ordenarTab(arr,key,getVal){ const s=sortStates[key]; if(!s) return arr; const dir=s.dir,col=s.col; return arr.slice().sort((a,b)=>{ let ka=getVal(a,col),kb=getVal(b,col); if(typeof ka==='string')ka=ka.toUpperCase(); if(typeof kb==='string')kb=kb.toUpperCase(); if(ka<kb)return -dir; if(ka>kb)return dir; return 0; }); }
+function dataOrd(s){ const m=String(s||'').match(/(\d{2})\/(\d{2})\/(\d{4})/); return m?(m[3]+m[2]+m[1]):'00000000'; }
 function renderCompras(){
   const f = document.getElementById('fCartao').value;
   let lista = DB.compras.filter(c=>passaPerfil(c.Perfil));
   if(f && f!=='todos') lista = lista.filter(c=>c.Cartao===f);
   if(!lista.length){ document.getElementById('comprasTbl').innerHTML='<div class="vazio">Nenhuma compra lançada. Clique em “Nova compra”.</div>'; return; }
-  let h='<table><thead><tr><th>Código</th><th>Tipo</th><th>Cartão</th><th>Data</th><th>Descrição</th><th>Pessoa</th><th>Parcelas</th><th class="num">Valor parcela</th><th class="num">Total</th><th>1º venc.</th><th></th></tr></thead><tbody>';
+  getSort('comp','data',-1);
+  lista=ordenarTab(lista,'comp',(c,col)=>{ const qtd=parseInt(c.QtdParcelas)||1, vp=parseValor(c.ValorParcela);
+    switch(col){ case 'codigo':return c.Codigo||''; case 'cartao':return c.Cartao||''; case 'data':return dataOrd(c.DataCompra); case 'desc':return c.Descricao||''; case 'valor':return vp; case 'total':return vp*qtd; case 'venc':return c.CompetenciaInicial||''; default:return dataOrd(c.DataCompra); } });
+  let h='<table><thead><tr>'+thSort('comp','codigo','Código',false,'renderCompras')+'<th>Tipo</th>'+thSort('comp','cartao','Cartão',false,'renderCompras')+thSort('comp','data','Data',false,'renderCompras')+thSort('comp','desc','Descrição',false,'renderCompras')+'<th>Pessoa</th><th>Parcelas</th>'+thSort('comp','valor','Valor parcela',true,'renderCompras')+thSort('comp','total','Total',true,'renderCompras')+thSort('comp','venc','1º venc.',false,'renderCompras')+'<th></th></tr></thead><tbody>';
   lista.forEach(c=>{
     const qtd=parseInt(c.QtdParcelas)||1, vp=parseValor(c.ValorParcela);
     const pg=Math.min(qtd,Math.max(0,parseInt(c.ParcelasPagas)||0));
@@ -1592,15 +1603,16 @@ async function salvarMovimento(){
 // ===== LANÇAR RECEITA / PAGAMENTO (avulsos manuais) =====
 function renderLancAvulso(tipo,elId){
   const el=document.getElementById(elId); if(!el) return;
-  const arr=(DB.movimentos||[]).filter(m=>
+  let arr=(DB.movimentos||[]).filter(m=>
     (m.Tipo||'')===tipo && String(m.Origem||'').toUpperCase()==='MANUAL' && passaPerfil(m.Perfil));
-  arr.sort((a,b)=>chaveData(b)-chaveData(a));
   if(!arr.length){ el.innerHTML='<p class="vazio">Nenhum lançamento ainda.</p>'; return; }
-  const ent=tipo==='ENTRADA';
-  let h='<table class="grid"><thead><tr><th>Data</th><th>Competência</th>'
-    +'<th>'+(ent?'Grupo':'Categoria')+'</th><th>Descrição</th>'
-    +(consolidado()?'<th>Pessoa</th>':'')+'<th>Conta</th><th class="num">Valor</th>'
-    +'<th>Status</th><th></th></tr></thead><tbody>';
+  const ent=tipo==='ENTRADA', key='lanc-'+tipo, fn=ent?'renderLancReceita':'renderLancPagamento';
+  getSort(key,'data',-1);
+  arr=ordenarTab(arr,key,(m,col)=>{ switch(col){ case 'data':return dataOrd(m.Data); case 'comp':return m.Competencia||''; case 'cat':return ent?(m.Grupo||''):(m.Categoria||m.Grupo||''); case 'desc':return m.Descricao||''; case 'pessoa':return m.Perfil||''; case 'conta':return m.Conta||''; case 'valor':return parseValor(m.Valor); case 'status':return m.Status||''; default:return dataOrd(m.Data); } });
+  let h='<table class="grid"><thead><tr>'+thSort(key,'data','Data',false,fn)+thSort(key,'comp','Competência',false,fn)
+    +thSort(key,'cat',(ent?'Grupo':'Categoria'),false,fn)+thSort(key,'desc','Descrição',false,fn)
+    +(consolidado()?thSort(key,'pessoa','Pessoa',false,fn):'')+thSort(key,'conta','Conta',false,fn)+thSort(key,'valor','Valor',true,fn)
+    +thSort(key,'status','Status',false,fn)+'<th></th></tr></thead><tbody>';
   arr.forEach(m=>{
     h+='<tr><td>'+(m.Data||'')+'</td><td>'+(m.Competencia||'')+'</td>'
       +'<td>'+(ent?(m.Grupo||''):(m.Categoria||m.Grupo||''))+'</td>'
