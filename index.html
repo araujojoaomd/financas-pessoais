@@ -346,6 +346,7 @@ th.sortable .seta{opacity:.55;font-size:10px}
       <button class="btn green" onclick="abrirMovimento(null,document.getElementById('extComp').value,'SAÍDA')">+ Pagamento</button>
     </div>
     <div id="extResumo" class="resumo" style="grid-template-columns:repeat(4,1fr)"></div>
+    <div id="extConcilia" style="margin:12px 0"></div>
     <div class="tbl-wrap"><div id="extTbl"></div></div>
     <p style="font-size:11.5px;color:#5B6B63;margin-top:10px">Mostra só o que já foi <b>realizado (PAGO)</b> nessa conta no mês, em ordem de data. O <b>saldo inicial</b> é o saldo no começo do mês e o saldo corre até o fim do mês. Previstos não entram aqui — confirme no <b>Controle do Mês</b>.</p>
   </div>
@@ -1525,6 +1526,7 @@ function marcadorOrigem(m){
   if(o==='PAGAMENTO'){ const card=p[0]==='CAR'?cartaoDaCompra(p[1]):''; return '<span class="pill p-comum">💳 Pagto c/ cartão'+(card?' · '+esc(card):'')+'</span>'; }
   if(o==='RECORRENTE'){ return '<span class="pill p-prev">🔁 Recorrente</span>'; }
   if(o==='EMPRÉSTIMO'||o==='EMPRESTIMO'){ return '<span class="pill p-prev">🏦 Empréstimo</span>'; }
+  if(o==='CONCILIACAO'||o==='CONCILIAÇÃO'){ return '<span class="pill p-comum" title="Ajuste de conciliação com o banco">⚖️ Conciliação</span>'; }
   return ((m.Tipo||'')==='ENTRADA')
     ? '<span class="pill" style="background:#EEF2F0;color:#5B6B63">💵 Receita</span>'
     : '<span class="pill" style="background:#EEF2F0;color:#5B6B63">💸 Pagamento/Compra</span>';
@@ -1812,6 +1814,76 @@ function renderExtrato(){
     +(consolidado()?'<th>Pessoa</th>':'')
     +'<th>Origem</th><th class="num">Entrada</th><th class="num">Saída</th>'
     +'<th class="num">Saldo</th></tr></thead><tbody>'+linhas+'</tbody></table>';
+  // Mês aberto x fechado (conciliado)
+  const concEl=document.getElementById('extConcilia');
+  if(concEl){
+    if(consolidado()){ concEl.innerHTML='<div style="font-size:11.5px;color:#5B6B63">Selecione um perfil (João ou Lívia) e uma conta para conciliar o mês.</div>'; }
+    else {
+      const conc=conciliacaoDoMes(nome, comp);
+      if(conc){
+        concEl.innerHTML='<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#ECFDF3;border:1px solid #BBE9CB;border-radius:10px;padding:10px 14px">'
+          +'<span style="font-weight:700;color:#166534">🔒 Mês fechado (conciliado)</span>'
+          +'<span style="font-size:12.5px;color:#3F4F48">Saldo real no banco: <b>'+brl(saldo)+'</b></span><div style="flex:1"></div>'
+          +'<button class="btn-ghost" onclick=\'abrirConciliar('+JSON.stringify(nome)+','+JSON.stringify(comp)+')\'>Reconciliar</button>'
+          +'<button class="btn-ghost" onclick=\'reabrirMes('+JSON.stringify(nome)+','+JSON.stringify(comp)+')\'>Reabrir</button></div>';
+      } else {
+        concEl.innerHTML='<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#FFF8E6;border:1px solid #F2D6A6;border-radius:10px;padding:10px 14px">'
+          +'<span style="font-weight:700;color:#B45309">🔓 Mês aberto</span>'
+          +'<span style="font-size:12.5px;color:#3F4F48">Saldo calculado (provisório): <b>'+brl(saldo)+'</b></span><div style="flex:1"></div>'
+          +'<button class="btn green" onclick=\'abrirConciliar('+JSON.stringify(nome)+','+JSON.stringify(comp)+')\'>🔒 Fechar mês / Conciliar</button></div>';
+      }
+    }
+  }
+}
+// Conciliação: fecha o mês de uma conta batendo com o saldo real do banco.
+function conciliacaoDoMes(nome, comp){ const ref='CONC:'+nome+':'+comp; return (DB.movimentos||[]).find(m=>String(m.Ref||'')===ref)||null; }
+function fechamentoSemConc(nome, comp){
+  const c=DB.contas.find(x=>x.Nome===nome); let s=c?parseValor(c.SaldoInicial):0;
+  const ref='CONC:'+nome+':'+comp;
+  movimentosDaConta(nome).forEach(m=>{ if(String(m.Ref||'')===ref) return; if(mesDoMov(m)>comp) return; const v=parseValor(m.Valor); s+=((m.Tipo||'')==='ENTRADA'?v:-v); });
+  return s;
+}
+function diaFimMes(comp){ const p=String(comp).split('-'); const y=+p[0], m=+p[1]; const d=new Date(y,m,0).getDate(); return String(d).padStart(2,'0')+'/'+String(m).padStart(2,'0')+'/'+y; }
+function abrirConciliar(nome, comp){
+  const calc=fechamentoSemConc(nome, comp);
+  const conc=conciliacaoDoMes(nome, comp);
+  const realAtual = conc? (calc + parseValor(conc.Valor)*((conc.Tipo||'')==='ENTRADA'?1:-1)) : calc;
+  document.getElementById('modalT').textContent='Conciliar / Fechar mês — '+labelMesAno(comp);
+  document.getElementById('modalC').innerHTML=
+     '<input type="hidden" id="conc-conta" value="'+esc(nome)+'"><input type="hidden" id="conc-comp" value="'+esc(comp)+'">'
+    +'<div style="font-size:12px;color:#5B6B63;margin-bottom:8px">Conta: <b>'+esc(nome)+'</b></div>'
+    +'<div style="background:#F6F8FA;border-radius:8px;padding:10px;font-size:12.5px;margin-bottom:10px">Saldo calculado pelo app: <b id="conc-calc">'+brl(calc)+'</b></div>'
+    +'<div class="grid full">'+fld('Saldo REAL no banco (fim de '+labelMesAno(comp)+')','<input id="conc-real" inputmode="decimal" value="'+String(realAtual).replace('.',',')+'" oninput="previewConc()">')+'</div>'
+    +'<div id="conc-diff" style="font-size:12.5px;margin:2px 2px 8px"></div>'
+    +'<div class="acoes"><button class="btn-ghost" onclick="fecharModal()">Cancelar</button><button class="btn green" id="conc-save" onclick="salvarConciliacao()">🔒 Fechar mês</button></div>';
+  abrirModal(); previewConc();
+}
+function previewConc(){
+  const calc=parseValor(document.getElementById('conc-calc').textContent);
+  const real=parseValor(document.getElementById('conc-real').value);
+  const diff=real-calc, el=document.getElementById('conc-diff');
+  if(Math.abs(diff)<0.005) el.innerHTML='<span style="color:#16A34A">Bate certinho — sem diferença. ✓</span>';
+  else el.innerHTML='Diferença a ajustar: <b style="color:'+(diff<0?'#DC2626':'#16A34A')+'">'+(diff>0?'+':'')+brl(diff)+'</b> <span style="color:#5B6B63">(vira um lançamento de ajuste no mês)</span>';
+}
+async function salvarConciliacao(){
+  const nome=document.getElementById('conc-conta').value, comp=document.getElementById('conc-comp').value;
+  const calc=fechamentoSemConc(nome, comp);
+  const real=parseValor(document.getElementById('conc-real').value);
+  const diff=Math.round((real-calc)*100)/100;
+  const conc=conciliacaoDoMes(nome, comp);
+  const reg={Conta:nome,Perfil:perfilAtivo,Competencia:comp,CompGasto:'',Data:diaFimMes(comp),Tipo:diff>=0?'ENTRADA':'SAÍDA',Grupo:'CONCILIAÇÃO',Categoria:'',Descricao:'Conciliação — saldo do banco',Valor:Math.abs(diff),Status:'PAGO',Origem:'CONCILIACAO',Ref:'CONC:'+nome+':'+comp};
+  const btn=document.getElementById('conc-save'); if(btn){ btn.disabled=true; btn.textContent='Salvando...'; }
+  let r;
+  if(conc){ reg.ID=conc.ID; r=await chamar({acao:'editar',aba:'Movimentos',registro:reg}); }
+  else { r=await chamar({acao:'salvar',aba:'Movimentos',registro:reg}); }
+  if(r.ok){ toast('Mês fechado / conciliado'); fecharModal(); await carregar(); }
+  else { if(btn){ btn.disabled=false; btn.textContent='🔒 Fechar mês'; } toast('Erro: '+(r.erro||'falha'),true); }
+}
+async function reabrirMes(nome, comp){
+  const conc=conciliacaoDoMes(nome, comp); if(!conc) return;
+  if(!confirm('Reabrir '+labelMesAno(comp)+' de '+nome+'? O ajuste da conciliação será removido.')) return;
+  const r=await chamar({acao:'excluir',aba:'Movimentos',id:conc.ID});
+  if(r.ok){ toast('Mês reaberto'); await carregar(); } else toast('Erro: '+(r.erro||'falha'),true);
 }
 
 // ===== EMPRESTIMOS =====
