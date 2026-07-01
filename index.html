@@ -700,6 +700,8 @@ function compAdd(comp,n){ // comp 'AAAA-MM' + n meses
 function compLabel(comp){ const [a,m]=comp.split('-').map(Number); return MESES_PT[m-1]+'/'+String(a).slice(2); }
 function compAtual(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
 function compDeData(dataBR){ if(!dataBR) return compAtual(); const p=String(dataBR).split('/'); if(p.length!==3) return compAtual(); return p[2]+'-'+p[1].padStart(2,'0'); }
+// Competência de início do controle (Config INICIO_CONTROLE). Nada antes disso aparece. '' = sem corte.
+function inicioControle(){ const c=(DB.config||[]).find(x=>String(x.ID)==='INICIO_CONTROLE'); if(!c) return ''; const v=String(c.Valor||'').trim(); let m=v.match(/^(\d{4})-(\d{2})/); if(m) return m[1]+'-'+m[2]; m=v.match(/(\d{2})\/(\d{2})\/(\d{4})/); if(m) return m[3]+'-'+m[2]; return ''; }
 function pill(p){ const c={'JOÃO':'p-joao','LÍVIA':'p-livia'}[p]||'p-comum'; return '<span class="pill '+c+'">'+(p||'—')+'</span>'; }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 // Normaliza perfil ignorando acento/caixa, pra JOÃO == JOAO == joão (evita mismatch em imports/planilha).
@@ -858,19 +860,23 @@ function gastoParcela(c,k){
 // Regime de CAIXA: qualquer baixa (movimento com Ref) suprime a fonte; mostra só o que tem competência de caixa.
 function lancCaixa(){
   const suprime = new Set(DB.movimentos.map(m=>m.Ref).filter(Boolean));
+  const INI=inicioControle();
   return eventos()
     .filter(e=> e.fonte ? !suprime.has(e.ref) : String(e.origem||'').toUpperCase()!=='PAGTO_FATURA') // pagamento de fatura não é saída extra (a parcela já é)
     .filter(e=> e.compCaixa)
-    .map(e=>({...e, comp:e.compCaixa}));
+    .map(e=>({...e, comp:e.compCaixa}))
+    .filter(e=> !INI || e.comp>=INI);
 }
 // Regime de GASTO: só baixas que contam como gasto (CompGasto preenchido) suprimem a fonte.
 // Marcadores PAGO_CARTAO (sem CompGasto) NÃO suprimem aqui — o gasto fica na despesa original.
 function lancGasto(){
   const suprime = new Set(DB.movimentos.filter(m=>m.CompGasto).map(m=>m.Ref).filter(Boolean));
+  const INI=inicioControle();
   return eventos()
     .filter(e=> e.fonte ? !suprime.has(e.ref) : true)
     .filter(e=> e.compGasto)
-    .map(e=>({...e, comp:e.compGasto}));
+    .map(e=>({...e, comp:e.compGasto}))
+    .filter(e=> !INI || e.comp>=INI);
 }
 
 // ===== RENDER PRINCIPAL =====
@@ -881,7 +887,14 @@ function aplicarSidebar(){ try{ if(localStorage.getItem('fp_sidebar')==='1'){ co
 // ===== CONFIGURAÇÕES (fotos de perfil) =====
 function renderConfig(){
   const el=document.getElementById('configBody'); if(!el) return;
-  el.innerHTML = '<div class="tbl-wrap" style="padding:18px"><div style="font-size:11px;font-weight:700;color:#5B6B63;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px">Fotos de perfil</div>'
+  el.innerHTML =
+     '<div class="tbl-wrap" style="padding:18px;margin-bottom:16px"><div style="font-size:11px;font-weight:700;color:#5B6B63;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px">Início do controle</div>'
+   + '<div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">'
+   + fld('Mês de início','<input type="month" id="cfg-inicio" value="'+esc(inicioControle())+'">')
+   + '<button class="btn green" id="cfg-inicio-save" onclick="salvarInicioControle(false)">Salvar</button>'
+   + '<button class="btn-ghost" onclick="salvarInicioControle(true)">Remover corte</button>'
+   + '</div><p style="font-size:11.5px;color:#5B6B63;margin-top:10px">Recorrentes e lançamentos <b>antes</b> desse mês não aparecem no Controle do Mês, no Fluxo de Caixa nem no Extrato. Compras de cartão antigas continuam gerando as parcelas que vencem a partir daqui.</p></div>'
+   + '<div class="tbl-wrap" style="padding:18px"><div style="font-size:11px;font-weight:700;color:#5B6B63;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px">Fotos de perfil</div>'
    + '<div style="display:flex;gap:18px;flex-wrap:wrap">'
    + PERFIS.map(p=>{
       const foto=(PERFIL_FOTO[p]||'').trim();
@@ -896,6 +909,15 @@ function renderConfig(){
         + '</div>';
     }).join('')
    + '</div><p style="font-size:11.5px;color:#5B6B63;margin-top:14px">A foto é recortada em quadrado, reduzida e salva na planilha — sincroniza entre João e Lívia.</p></div>';
+}
+async function salvarInicioControle(remover){
+  const val = remover? '' : (document.getElementById('cfg-inicio').value||'');
+  const existente=(DB.config||[]).find(x=>String(x.ID)==='INICIO_CONTROLE');
+  const btn=document.getElementById('cfg-inicio-save'); if(btn){ btn.disabled=true; btn.textContent='Salvando...'; }
+  const reg={ID:'INICIO_CONTROLE',Valor:val};
+  const r = existente? await chamar({acao:'editar',aba:'Config',registro:reg}) : await chamar({acao:'salvar',aba:'Config',registro:reg});
+  if(r.ok){ toast(remover?'Corte removido':'Início do controle salvo'); await carregar(); }
+  else { if(btn){ btn.disabled=false; btn.textContent='Salvar'; } toast('Erro: '+(r.erro||'falha'),true); }
 }
 function uploadFoto(p, input){
   const file = input.files && input.files[0]; if(!file) return;
@@ -939,12 +961,13 @@ function grupoOrigemSaida(o){
 function labelMesAno(comp){ const p=String(comp).split('-'); const m=parseInt(p[1])||1; return MESES_FULL[m-1]+'/'+p[0]; }
 function popularSeletorMes(){
   const el=document.getElementById('mesComp'); if(!el) return;
-  const atual=el.value||compAtual();
-  const start=compAdd(compAtual(),-24);
+  const INI=inicioControle();
+  let start=compAdd(compAtual(),-24); if(INI&&INI>start) start=INI;
+  let atual=el.value||compAtual(); if(INI&&atual<INI) atual=INI;
   let opts=''; for(let i=0;i<61;i++){ const c=compAdd(start,i); opts+='<option value="'+c+'">'+labelMesAno(c)+'</option>'; }
   el.innerHTML=opts; el.value=atual;
 }
-function mesCompAtual(){ const el=document.getElementById('mesComp'); if(!el.options.length) popularSeletorMes(); if(!el.value) el.value=compAtual(); return el.value; }
+function mesCompAtual(){ const el=document.getElementById('mesComp'); if(!el.options.length) popularSeletorMes(); const INI=inicioControle(); if(!el.value) el.value=(INI&&INI>compAtual())?INI:compAtual(); return el.value; }
 function mudarMes(d){ const el=document.getElementById('mesComp'); const novo=compAdd(el.value||compAtual(),d); if([...el.options].some(o=>o.value===novo)){ el.value=novo; renderMes(); } }
 function linhaMes(l,i){
   const st=(l.status||'PREVISTO').toUpperCase();
@@ -1153,10 +1176,12 @@ function toggleFluxoGrupo(o){ fluxoGruposAbertos[o] = !fluxoGruposAbertos[o]; re
 function popularSeletoresFluxo(){
   const de=document.getElementById('fluxoDe'), ate=document.getElementById('fluxoAte');
   if(!de||!ate || (de.options.length && ate.options.length)) return;
-  const start=compAdd(compAtual(),-36);
+  const INI=inicioControle();
+  let start=compAdd(compAtual(),-36); if(INI&&INI>start) start=INI;
   let opts=''; for(let i=0;i<96;i++){ const c=compAdd(start,i); opts+='<option value="'+c+'">'+labelMesAno(c)+'</option>'; }
   de.innerHTML=opts; ate.innerHTML=opts;
-  de.value=compAdd(compAtual(),-1);   // default: mês anterior...
+  let defDe=compAdd(compAtual(),-1); if(INI&&defDe<INI) defDe=INI;
+  de.value=defDe;                     // default: mês anterior (ou início do controle)
   ate.value=compAdd(compAtual(),12);  // ...até 12 meses à frente
 }
 function periodoRapidoFluxo(){
@@ -1760,8 +1785,9 @@ function popularExtratoContas(){
 }
 function popularSeletorExtMes(){
   const el=document.getElementById('extComp'); if(!el) return;
-  const atual=el.value||compAtual();
-  const start=compAdd(compAtual(),-24);
+  const INI=inicioControle();
+  let start=compAdd(compAtual(),-24); if(INI&&INI>start) start=INI;
+  let atual=el.value||compAtual(); if(INI&&atual<INI) atual=INI;
   let opts=''; for(let i=0;i<61;i++){ const c=compAdd(start,i); opts+='<option value="'+c+'">'+labelMesAno(c)+'</option>'; }
   el.innerHTML=opts; el.value=atual;
 }
