@@ -202,7 +202,7 @@ th.sortable .seta{opacity:.55;font-size:10px}
   <button class="side-item" data-view="recreceitas" onclick="setView('recreceitas')"><span class="si-ic" style="color:#16A34A;font-weight:800">↑</span><span class="si-lbl">Entradas Recorrentes</span></button>
   <button class="side-item" data-view="recpagamentos" onclick="setView('recpagamentos')"><span class="si-ic" style="color:#DC2626;font-weight:800">↓</span><span class="si-lbl">Saídas Recorrentes</span></button>
   <button class="side-item" data-view="emprestimos" onclick="setView('emprestimos')"><span class="si-ic">🏦</span><span class="si-lbl">Empréstimos</span></button>
-  <button class="side-item" data-view="extrato" onclick="setView('extrato')"><span class="si-ic">📄</span><span class="si-lbl">Extrato Bancário</span></button>
+  <button class="side-item" data-view="extrato" onclick="setView('extrato')"><span class="si-ic">💵</span><span class="si-lbl">Bancos</span></button>
   <div class="side-h">Histórico</div>
   <button class="side-item" data-view="lancreceita" onclick="setView('lancreceita')"><span class="si-ic">📥</span><span class="si-lbl">Entradas Manuais</span></button>
   <button class="side-item" data-view="lancpagamento" onclick="setView('lancpagamento')"><span class="si-ic">📤</span><span class="si-lbl">Saídas Manuais</span></button>
@@ -336,8 +336,7 @@ th.sortable .seta{opacity:.55;font-size:10px}
   <!-- EXTRATO BANCÁRIO -->
   <div class="view" id="v-extrato">
     <div class="toolbar">
-      <h2>Extrato bancário</h2>
-      <select class="flt" id="extConta" style="min-width:220px" onchange="renderExtrato()"></select>
+      <h2>Bancos</h2>
       <button class="btn-ghost" onclick="mudarExtMes(-1)">‹</button>
       <select class="flt" id="extComp" style="min-width:150px;text-align:center;font-weight:600" onchange="renderExtrato()"></select>
       <button class="btn-ghost" onclick="mudarExtMes(1)">›</button>
@@ -348,7 +347,7 @@ th.sortable .seta{opacity:.55;font-size:10px}
     <div id="extResumo" class="resumo" style="grid-template-columns:repeat(4,1fr)"></div>
     <div id="extConcilia" style="margin:12px 0"></div>
     <div class="tbl-wrap"><div id="extTbl"></div></div>
-    <p style="font-size:11.5px;color:#5B6B63;margin-top:10px">Mostra só o que já foi <b>realizado (PAGO)</b> nessa conta no mês, em ordem de data. O <b>saldo inicial</b> é o saldo no começo do mês e o saldo corre até o fim do mês. Previstos não entram aqui — confirme no <b>Controle do Mês</b>.</p>
+    <p style="font-size:11.5px;color:#5B6B63;margin-top:10px">Todos os bancos somados num pool só. A <b>abertura</b> de cada mês é o <b>fechamento informado do mês anterior</b> (o 1º mês usa o saldo inicial da conta). Você informa só o <b>fechamento real</b> de cada conta; a diferença vira um ajuste que mantém o Fluxo de Caixa certo mesmo se você esquecer um lançamento. Só entram movimentos já <b>realizados (PAGO)</b>.</p>
   </div>
 
   <!-- MOVIMENTOS -->
@@ -1796,77 +1795,97 @@ function mudarExtMes(d){
   const novo=compAdd(el.value||compAtual(),d);
   if([...el.options].some(o=>o.value===novo)){ el.value=novo; renderExtrato(); }
 }
+// Consolida uma conta no mês: abertura (= fechamento do mês anterior via rollforward),
+// entradas/saídas realizadas, fechamento calculado e o ajuste de conciliação (se houver).
+function bancoConta(nome, comp){
+  const c=DB.contas.find(x=>x.Nome===nome);
+  const ini=c?parseValor(c.SaldoInicial):0;
+  const INI=inicioControle();
+  const refConc='CONC:'+nome+':'+comp;
+  let abertura=ini, entradas=0, saidas=0, conc=null; const movs=[];
+  movimentosDaConta(nome).forEach(m=>{
+    const mm=mesDoMov(m);
+    if(INI && mm<INI) return;                       // antes do início do controle: ignora
+    if(mm<comp){ const v=parseValor(m.Valor); abertura+=((m.Tipo||'')==='ENTRADA'?v:-v); return; }
+    if(mm>comp) return;
+    if(String(m.Ref||'')===refConc){ conc=m; return; }  // o ajuste do mês entra separado
+    const v=parseValor(m.Valor);
+    if((m.Tipo||'')==='ENTRADA') entradas+=v; else saidas+=v;
+    movs.push(m);
+  });
+  const calc=abertura+entradas-saidas;
+  const dif=conc? parseValor(conc.Valor)*((conc.Tipo||'')==='ENTRADA'?1:-1) : 0;
+  return {nome, abertura, entradas, saidas, calc, conc, dif, informado:(conc?calc+dif:null), fechado:!!conc, movs};
+}
 function renderExtrato(){
-  popularExtratoContas();
   const elMes=document.getElementById('extComp');
   if(elMes && !elMes.options.length) popularSeletorExtMes();
-  if(elMes && !elMes.value) elMes.value=compAtual();
+  const INI=inicioControle();
+  if(elMes && !elMes.value) elMes.value=(INI&&INI>compAtual())?INI:compAtual();
   const comp=elMes?elMes.value:compAtual();
-  const sel=document.getElementById('extConta');
   const resumo=document.getElementById('extResumo');
+  const concEl=document.getElementById('extConcilia');
   const tbl=document.getElementById('extTbl');
-  if(!sel||!resumo||!tbl) return;
-  const nome=sel.value;
-  if(!nome){ resumo.innerHTML=''; tbl.innerHTML='<p class="vazio">Nenhuma conta cadastrada para este perfil.</p>'; return; }
-  const conta=(DB.contas||[]).find(c=>c.Nome===nome);
-  const ini=conta?parseValor(conta.SaldoInicial):0;
-  const movs=movimentosDaConta(nome);
-  // Saldo inicial do mês = saldo cadastrado + tudo que foi realizado antes do mês.
-  let abertura=ini;
-  movs.forEach(m=>{ if(mesDoMov(m)<comp){ const v=parseValor(m.Valor); abertura+=((m.Tipo||'')==='ENTRADA'?v:-v); } });
-  const doMes=movs.filter(m=>mesDoMov(m)===comp);
-  let saldo=abertura, entradas=0, saidas=0;
-  let linhas='<tr class="ext-abertura"><td colspan="'+(consolidado()?6:5)+'">Saldo inicial ('+labelMesAno(comp)+')</td>'
-    +'<td class="num '+(abertura<0?'v-neg':'')+'">'+brl(abertura)+'</td></tr>';
-  doMes.forEach(m=>{
-    const ent=(m.Tipo||'')==='ENTRADA';
-    const v=parseValor(m.Valor);
-    if(ent){ saldo+=v; entradas+=v; } else { saldo-=v; saidas+=v; }
-    linhas+='<tr><td>'+(m.Data||'')+'</td><td>'+(m.Descricao||'')+'</td>'
-      +(consolidado()?'<td>'+(m.Perfil||'')+'</td>':'')
-      +'<td>'+marcadorOrigem(m)+'</td>'
+  if(!resumo||!tbl) return;
+  const contas=(DB.contas||[]).filter(c=>passaPerfil(c.Perfil)).map(c=>c.Nome);
+  if(!contas.length){ resumo.innerHTML=''; if(concEl) concEl.innerHTML=''; tbl.innerHTML='<p class="vazio">Nenhuma conta bancária cadastrada para este perfil.</p>'; return; }
+  const dados=contas.map(n=>bancoConta(n,comp));
+  let tAb=0,tEnt=0,tSai=0,tCalc=0,tInf=0,tDif=0,fechadas=0;
+  dados.forEach(d=>{ tAb+=d.abertura; tEnt+=d.entradas; tSai+=d.saidas; tCalc+=d.calc; tDif+=d.dif; tInf+=(d.informado!=null?d.informado:d.calc); if(d.fechado) fechadas++; });
+  const todasFechadas=fechadas===dados.length;
+  resumo.innerHTML=card('Abertura (Bancos)',brl(tAb),tAb<0?'v-neg':'')
+    +card('Entradas',brl(tEnt),'v-in')
+    +card('Saídas',brl(tSai),'v-out')
+    +card(todasFechadas?'Fechamento real':'Fechamento calculado',brl(tInf),tInf<0?'v-neg':'v-liq');
+  if(concEl){
+    concEl.innerHTML='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:'+(todasFechadas?'#ECFDF3':'#FFF8E6')+';border:1px solid '+(todasFechadas?'#BBE9CB':'#F2D6A6')+';border-radius:10px;padding:10px 14px">'
+      +'<span style="font-weight:700;color:'+(todasFechadas?'#166534':'#B45309')+'">'+(todasFechadas?'🔒 Mês fechado':'🔓 Mês aberto')+'</span>'
+      +'<span style="font-size:12.5px;color:#3F4F48">'+fechadas+' de '+dados.length+' conta(s) conciliada(s)'+(Math.abs(tDif)>=0.005?' · ajuste total <b>'+(tDif>0?'+':'')+brl(tDif)+'</b>':'')+'</span></div>';
+  }
+  // Conciliação por conta (você informa só o fechamento real de cada uma)
+  let porConta='<table class="grid"><thead><tr><th>Conta</th><th class="num">Abertura</th><th class="num">Entradas</th><th class="num">Saídas</th><th class="num">Fech. calc.</th><th class="num">Fech. real</th><th class="num">Dif.</th><th></th></tr></thead><tbody>';
+  dados.forEach(d=>{
+    porConta+='<tr><td>'+esc(d.nome)+'</td>'
+      +'<td class="num '+(d.abertura<0?'v-neg':'')+'">'+brl(d.abertura)+'</td>'
+      +'<td class="num v-in">'+(d.entradas?brl(d.entradas):'—')+'</td>'
+      +'<td class="num v-out">'+(d.saidas?brl(d.saidas):'—')+'</td>'
+      +'<td class="num '+(d.calc<0?'v-neg':'')+'">'+brl(d.calc)+'</td>'
+      +'<td class="num">'+(d.fechado?brl(d.informado):'<span style="color:#B45309">—</span>')+'</td>'
+      +'<td class="num">'+(d.fechado?(Math.abs(d.dif)<0.005?'<span style="color:#16A34A">ok</span>':'<b style="color:'+(d.dif<0?'#DC2626':'#16A34A')+'">'+(d.dif>0?'+':'')+brl(d.dif)+'</b>'):'')+'</td>'
+      +'<td class="num" style="white-space:nowrap">'+(d.fechado
+        ? '<button class="btn-ghost" onclick=\'abrirConciliar('+JSON.stringify(d.nome)+','+JSON.stringify(comp)+')\'>Reconciliar</button> <button class="btn-ghost" onclick=\'reabrirMes('+JSON.stringify(d.nome)+','+JSON.stringify(comp)+')\'>Reabrir</button>'
+        : '<button class="btn green" onclick=\'abrirConciliar('+JSON.stringify(d.nome)+','+JSON.stringify(comp)+')\'>🔒 Informar fechamento</button>')
+      +'</td></tr>';
+  });
+  porConta+='</tbody></table>';
+  // Movimentos do mês (pool consolidado, histórico) com saldo corrido a partir da abertura
+  let pooled=[]; dados.forEach(d=> d.movs.forEach(m=> pooled.push(m)));
+  pooled.sort((a,b)=>chaveData(a)-chaveData(b));
+  let saldo=tAb;
+  let hist='<tr class="ext-abertura"><td colspan="5">Abertura consolidada ('+labelMesAno(comp)+')</td><td class="num '+(tAb<0?'v-neg':'')+'">'+brl(tAb)+'</td></tr>';
+  pooled.forEach(m=>{
+    const ent=(m.Tipo||'')==='ENTRADA'; const v=parseValor(m.Valor);
+    if(ent) saldo+=v; else saldo-=v;
+    hist+='<tr><td>'+(m.Data||'')+'</td><td>'+marcadorOrigem(m)+' '+esc(m.Descricao||'')+'</td>'
+      +'<td>'+esc(m.Conta||'')+'</td>'
       +'<td class="num v-in">'+(ent?brl(v):'')+'</td>'
       +'<td class="num v-out">'+(ent?'':brl(v))+'</td>'
       +'<td class="num '+(saldo<0?'v-neg':'')+'">'+brl(saldo)+'</td></tr>';
   });
-  if(!doMes.length){
-    linhas+='<tr><td colspan="'+(consolidado()?7:6)+'" class="vazio">Nenhuma movimentação realizada neste mês.</td></tr>';
-  }
-  resumo.innerHTML=card('Saldo inicial',brl(abertura),abertura<0?'v-neg':'')
-    +card('Entradas',brl(entradas),'v-in')
-    +card('Saídas',brl(saidas),'v-out')
-    +card('Saldo final',brl(saldo),saldo<0?'v-neg':'v-liq');
-  tbl.innerHTML='<table class="grid"><thead><tr><th>Data</th><th>Descrição</th>'
-    +(consolidado()?'<th>Pessoa</th>':'')
-    +'<th>Origem</th><th class="num">Entrada</th><th class="num">Saída</th>'
-    +'<th class="num">Saldo</th></tr></thead><tbody>'+linhas+'</tbody></table>';
-  // Mês aberto x fechado (conciliado)
-  const concEl=document.getElementById('extConcilia');
-  if(concEl){
-    if(consolidado()){ concEl.innerHTML='<div style="font-size:11.5px;color:#5B6B63">Selecione um perfil (João ou Lívia) e uma conta para conciliar o mês.</div>'; }
-    else {
-      const conc=conciliacaoDoMes(nome, comp);
-      if(conc){
-        concEl.innerHTML='<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#ECFDF3;border:1px solid #BBE9CB;border-radius:10px;padding:10px 14px">'
-          +'<span style="font-weight:700;color:#166534">🔒 Mês fechado (conciliado)</span>'
-          +'<span style="font-size:12.5px;color:#3F4F48">Saldo real no banco: <b>'+brl(saldo)+'</b></span><div style="flex:1"></div>'
-          +'<button class="btn-ghost" onclick=\'abrirConciliar('+JSON.stringify(nome)+','+JSON.stringify(comp)+')\'>Reconciliar</button>'
-          +'<button class="btn-ghost" onclick=\'reabrirMes('+JSON.stringify(nome)+','+JSON.stringify(comp)+')\'>Reabrir</button></div>';
-      } else {
-        concEl.innerHTML='<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#FFF8E6;border:1px solid #F2D6A6;border-radius:10px;padding:10px 14px">'
-          +'<span style="font-weight:700;color:#B45309">🔓 Mês aberto</span>'
-          +'<span style="font-size:12.5px;color:#3F4F48">Saldo calculado (provisório): <b>'+brl(saldo)+'</b></span><div style="flex:1"></div>'
-          +'<button class="btn green" onclick=\'abrirConciliar('+JSON.stringify(nome)+','+JSON.stringify(comp)+')\'>🔒 Fechar mês / Conciliar</button></div>';
-      }
-    }
-  }
+  if(!pooled.length) hist+='<tr><td colspan="6" class="vazio">Nenhuma movimentação realizada neste mês.</td></tr>';
+  hist+='<tr class="ext-abertura"><td colspan="5">Fechamento calculado</td><td class="num '+(tCalc<0?'v-neg':'')+'">'+brl(tCalc)+'</td></tr>';
+  if(todasFechadas && Math.abs(tDif)>=0.005) hist+='<tr class="ext-abertura"><td colspan="5">Ajuste de conciliação</td><td class="num"><b style="color:'+(tDif<0?'#DC2626':'#16A34A')+'">'+(tDif>0?'+':'')+brl(tDif)+'</b></td></tr>';
+  if(todasFechadas) hist+='<tr class="ext-abertura"><td colspan="5"><b>Fechamento real</b></td><td class="num '+(tInf<0?'v-neg':'v-liq')+'"><b>'+brl(tInf)+'</b></td></tr>';
+  const histTbl='<table class="grid"><thead><tr><th>Data</th><th>Descrição</th><th>Conta</th><th class="num">Entrada</th><th class="num">Saída</th><th class="num">Saldo</th></tr></thead><tbody>'+hist+'</tbody></table>';
+  tbl.innerHTML='<div style="font-size:11px;font-weight:700;color:#5B6B63;text-transform:uppercase;letter-spacing:1px;margin:2px 0 8px">Conciliação por conta</div>'+porConta
+    +'<div style="font-size:11px;font-weight:700;color:#5B6B63;text-transform:uppercase;letter-spacing:1px;margin:18px 0 8px">Movimentos do mês (Bancos)</div>'+histTbl;
 }
 // Conciliação: fecha o mês de uma conta batendo com o saldo real do banco.
 function conciliacaoDoMes(nome, comp){ const ref='CONC:'+nome+':'+comp; return (DB.movimentos||[]).find(m=>String(m.Ref||'')===ref)||null; }
 function fechamentoSemConc(nome, comp){
   const c=DB.contas.find(x=>x.Nome===nome); let s=c?parseValor(c.SaldoInicial):0;
-  const ref='CONC:'+nome+':'+comp;
-  movimentosDaConta(nome).forEach(m=>{ if(String(m.Ref||'')===ref) return; if(mesDoMov(m)>comp) return; const v=parseValor(m.Valor); s+=((m.Tipo||'')==='ENTRADA'?v:-v); });
+  const INI=inicioControle(), ref='CONC:'+nome+':'+comp;
+  movimentosDaConta(nome).forEach(m=>{ if(String(m.Ref||'')===ref) return; const mm=mesDoMov(m); if(INI&&mm<INI) return; if(mm>comp) return; const v=parseValor(m.Valor); s+=((m.Tipo||'')==='ENTRADA'?v:-v); });
   return s;
 }
 function diaFimMes(comp){ const p=String(comp).split('-'); const y=+p[0], m=+p[1]; const d=new Date(y,m,0).getDate(); return String(d).padStart(2,'0')+'/'+String(m).padStart(2,'0')+'/'+y; }
@@ -1897,7 +1916,8 @@ async function salvarConciliacao(){
   const real=parseValor(document.getElementById('conc-real').value);
   const diff=Math.round((real-calc)*100)/100;
   const conc=conciliacaoDoMes(nome, comp);
-  const reg={Conta:nome,Perfil:perfilAtivo,Competencia:comp,CompGasto:'',Data:diaFimMes(comp),Tipo:diff>=0?'ENTRADA':'SAÍDA',Grupo:'CONCILIAÇÃO',Categoria:'',Descricao:'Conciliação — saldo do banco',Valor:Math.abs(diff),Status:'PAGO',Origem:'CONCILIACAO',Ref:'CONC:'+nome+':'+comp};
+  const contaObj=DB.contas.find(x=>x.Nome===nome); const perfilConta=contaObj?(contaObj.Perfil||'JOÃO'):perfilAtivo;
+  const reg={Conta:nome,Perfil:perfilConta,Competencia:comp,CompGasto:'',Data:diaFimMes(comp),Tipo:diff>=0?'ENTRADA':'SAÍDA',Grupo:'CONCILIAÇÃO',Categoria:'',Descricao:'Conciliação — saldo do banco',Valor:Math.abs(diff),Status:'PAGO',Origem:'CONCILIACAO',Ref:'CONC:'+nome+':'+comp};
   const btn=document.getElementById('conc-save'); if(btn){ btn.disabled=true; btn.textContent='Salvando...'; }
   let r;
   if(conc){ reg.ID=conc.ID; r=await chamar({acao:'editar',aba:'Movimentos',registro:reg}); }
