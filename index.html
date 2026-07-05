@@ -200,6 +200,7 @@ th.sortable .seta{opacity:.55;font-size:10px}
   <button class="side-item" data-view="fluxo" onclick="setView('fluxo')"><span class="si-ic">📊</span><span class="si-lbl">Fluxo de Caixa</span></button>
   <div class="side-h">Situação</div>
   <button class="side-item" data-view="recreceitas" onclick="setView('recreceitas')"><span class="si-ic" style="color:#16A34A;font-weight:800">↑</span><span class="si-lbl">Entradas Recorrentes</span></button>
+  <button class="side-item" data-view="contracheque" onclick="setView('contracheque')"><span class="si-ic">🧾</span><span class="si-lbl">Contracheque</span></button>
   <button class="side-item" data-view="recpagamentos" onclick="setView('recpagamentos')"><span class="si-ic" style="color:#DC2626;font-weight:800">↓</span><span class="si-lbl">Saídas Recorrentes</span></button>
   <button class="side-item" data-view="emprestimos" onclick="setView('emprestimos')"><span class="si-ic">🏦</span><span class="si-lbl">Empréstimos</span></button>
   <button class="side-item" data-view="extrato" onclick="setView('extrato')"><span class="si-ic">💵</span><span class="si-lbl">Bancos</span></button>
@@ -348,6 +349,18 @@ th.sortable .seta{opacity:.55;font-size:10px}
     <div id="extConcilia" style="margin:12px 0"></div>
     <div class="tbl-wrap"><div id="extTbl"></div></div>
     <p style="font-size:11.5px;color:#5B6B63;margin-top:10px">Todos os bancos somados num pool só. A <b>abertura</b> de cada mês é o <b>fechamento informado do mês anterior</b> (o 1º mês usa o saldo inicial da conta). Você informa só o <b>fechamento real</b> de cada conta; a diferença vira um ajuste que mantém o Fluxo de Caixa certo mesmo se você esquecer um lançamento. Só entram movimentos já <b>realizados (PAGO)</b>.</p>
+  </div>
+
+  <!-- CONTRACHEQUE -->
+  <div class="view" id="v-contracheque">
+    <div class="toolbar">
+      <h2>Contracheque</h2>
+      <button class="btn-ghost" onclick="mudarContraMes(-1)">‹</button>
+      <select class="flt" id="contraComp" style="min-width:150px;text-align:center;font-weight:600" onchange="renderContracheque()"></select>
+      <button class="btn-ghost" onclick="mudarContraMes(1)">›</button>
+    </div>
+    <div id="contraBody"></div>
+    <p style="font-size:11.5px;color:#5B6B63;margin-top:10px">Reconstrói o holerite: <b>salário bruto</b> − <b>descontos oficiais</b> (INSS/IR que você digita) − <b>consignados</b> − <b>despesas em folha</b> = <b>líquido</b>. O líquido é exatamente o que entra no banco (Controle / Fluxo / Bancos). Empréstimos e despesas se editam na tela própria pelo botão ✎.</p>
   </div>
 
   <!-- MOVIMENTOS -->
@@ -763,7 +776,7 @@ function descontosSalario(salId, comp){
     for(let k=jaPagas;k<qtd;k++){ if(compAdd(ini,k)===comp){
       const refK='FOLHA:'+e.ID+':'+comp, aj=ajusteMes(refK);
       const v=aj? aj.valor : parseValor(e.ValorParcela);
-      total+=v; rows.push({descricao:'Consignado '+(e.Instituicao||''), valor:v, ref:refK, ajustado:!!aj}); break; } }
+      total+=v; rows.push({descricao:'Consignado '+(e.Instituicao||''), nome:'Consignado '+(e.Instituicao||''), tipo:'CONSIGNADO', id:e.ID, valor:v, ref:refK, ajustado:!!aj}); break; } }
   });
   DB.recorrentes.forEach(r=>{
     if(String(r.EmFolha||'').toUpperCase()!=='SIM' || r.SalarioRef!==salId) return;
@@ -772,7 +785,7 @@ function descontosSalario(salId, comp){
     if(comp>=vi && comp<=vf){
       const refK='FOLHA:'+r.ID+':'+comp, aj=ajusteMes(refK);
       const v=aj? aj.valor : parseValor(r.ValorPadrao);
-      total+=v; rows.push({descricao:(r.Descricao||'')+' (folha)', valor:v, ref:refK, ajustado:!!aj}); }
+      total+=v; rows.push({descricao:(r.Descricao||'')+' (folha)', nome:(r.Descricao||''), tipo:(String(r.Grupo||'').toUpperCase()==='DESCONTOS OFICIAIS'?'OFICIAL':'DESPESA'), id:r.ID, valor:v, ref:refK, ajustado:!!aj}); }
   });
   return {total, rows};
 }
@@ -781,6 +794,103 @@ function descontosSalario(salId, comp){
 function ajusteMes(refKey){
   const m=(DB.movimentos||[]).find(x=>String(x.Origem||'').toUpperCase()==='AJUSTE_MES' && String(x.Ref||'')===refKey);
   return m? {valor:parseValor(m.Valor), movId:m.ID} : null;
+}
+// ===== CONTRACHEQUE =====
+function popularSeletorContraMes(){
+  const el=document.getElementById('contraComp'); if(!el) return;
+  const INI=inicioControle();
+  let start=compAdd(compAtual(),-12); if(INI&&INI>start) start=INI;
+  let atual=el.value||compAtual(); if(INI&&atual<INI) atual=INI;
+  let opts=''; for(let i=0;i<49;i++){ const c=compAdd(start,i); opts+='<option value="'+c+'">'+labelMesAno(c)+'</option>'; }
+  el.innerHTML=opts; el.value=atual;
+}
+function mudarContraMes(d){ const el=document.getElementById('contraComp'); const novo=compAdd(el.value||compAtual(),d); if([...el.options].some(o=>o.value===novo)){ el.value=novo; renderContracheque(); } }
+// Monta o holerite de um salário no mês: bruto (com ajuste do mês) e os descontos por tipo.
+function contrachequeSalario(sal, comp){
+  const refB='BRUTO:'+sal.ID+':'+comp, ajB=ajusteMes(refB);
+  const bruto=ajB? ajB.valor : parseValor(sal.ValorPadrao);
+  const d=descontosSalario(sal.ID, comp);
+  return { bruto, brutoAj:!!ajB,
+    oficiais:d.rows.filter(x=>x.tipo==='OFICIAL'),
+    consignados:d.rows.filter(x=>x.tipo==='CONSIGNADO'),
+    despesas:d.rows.filter(x=>x.tipo==='DESPESA'),
+    total:d.total, liquido:bruto-d.total };
+}
+function linhaDescCC(nome, valor, botoes){
+  return '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 2px;gap:8px">'
+    +'<span style="flex:1">'+esc(nome)+'</span>'+(botoes||'')
+    +'<span class="v-out" style="min-width:120px;text-align:right">− '+brl(valor)+'</span></div>';
+}
+function secaoCC(t){ return '<div style="font-size:11px;font-weight:700;color:#5B6B63;text-transform:uppercase;letter-spacing:.5px;margin:12px 0 4px;border-top:1px solid #E5EAE7;padding-top:8px">'+esc(t)+'</div>'; }
+function btnEditCC(fn, arg1, arg2){
+  const args = (arg2!==undefined) ? (JSON.stringify(arg1)+','+JSON.stringify(arg2)) : JSON.stringify(arg1);
+  return '<button class="btn-ghost" style="padding:2px 8px;font-size:12px" title="Editar" onclick=\''+fn+'('+args+')\'>✎</button>';
+}
+function renderContracheque(){
+  const el=document.getElementById('contraBody'); if(!el) return;
+  const mel=document.getElementById('contraComp');
+  if(mel && !mel.options.length) popularSeletorContraMes();
+  const INI=inicioControle();
+  if(mel && !mel.value) mel.value=(INI&&INI>compAtual())?INI:compAtual();
+  const comp=mel?mel.value:compAtual();
+  const sals=salariosDoPerfil();
+  if(!sals.length){ el.innerHTML='<p class="vazio">Nenhum salário cadastrado para este perfil. Cadastre em <b>Entradas Recorrentes</b> (grupo SALÁRIO).</p>'; return; }
+  let html=''; let totLiq=0;
+  sals.forEach(sal=>{
+    const c=contrachequeSalario(sal, comp); totLiq+=c.liquido;
+    html+='<div class="tbl-wrap" style="padding:16px;margin-bottom:16px">';
+    html+='<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px"><div style="font-weight:700;font-size:15px">'+esc(sal.Descricao||'Salário')+'</div>'+(consolidado()?pill(sal.Perfil):'')+'<div style="flex:1"></div><div style="font-size:12px;color:#5B6B63">'+labelMesAno(comp)+'</div></div>';
+    html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 2px;font-weight:700"><span>Salário bruto</span><span class="v-in" style="font-size:15px">'+brl(c.bruto)+'</span></div>';
+    // Descontos oficiais (editáveis aqui mesmo)
+    html+=secaoCC('Descontos oficiais');
+    if(c.oficiais.length) c.oficiais.forEach(o=> html+=linhaDescCC(o.nome, o.valor, btnEditCC('abrirDescOficial', sal.ID, o.id)+'<button class="btn-ghost" style="padding:2px 8px;font-size:12px" title="Remover" onclick=\'excluirDescOficial('+JSON.stringify(o.id)+')\'>🗑</button>'));
+    else html+='<div style="font-size:12px;color:#8A9A92;padding:4px 2px">Nenhum desconto oficial cadastrado.</div>';
+    html+='<div style="padding:6px 2px"><button class="btn-ghost" onclick=\'abrirDescOficial('+JSON.stringify(sal.ID)+')\'>+ Adicionar desconto oficial</button></div>';
+    // Empréstimos (consignados)
+    html+=secaoCC('Empréstimos (consignados)');
+    if(c.consignados.length) c.consignados.forEach(x=> html+=linhaDescCC(x.nome, x.valor, btnEditCC('abrirEmprestimo', x.id)));
+    else html+='<div style="font-size:12px;color:#8A9A92;padding:4px 2px">Nenhum consignado vinculado a este salário.</div>';
+    // Despesas em folha
+    html+=secaoCC('Despesas em folha');
+    if(c.despesas.length) c.despesas.forEach(x=> html+=linhaDescCC(x.nome, x.valor, btnEditCC('abrirRecorrente', x.id)));
+    else html+='<div style="font-size:12px;color:#8A9A92;padding:4px 2px">Nenhuma despesa em folha vinculada.</div>';
+    // Líquido
+    html+='<div style="border-top:2px solid #0F3D2E;margin-top:12px;padding-top:8px;display:flex;justify-content:space-between;align-items:center"><span style="font-weight:800;font-size:15px">Salário líquido</span><span style="font-weight:800;font-size:17px" class="'+(c.liquido<0?'v-neg':'v-liq')+'">'+brl(c.liquido)+'</span></div>';
+    html+='</div>';
+  });
+  if(sals.length>1) html+='<div class="tbl-wrap" style="padding:14px 16px;display:flex;justify-content:space-between;align-items:center"><span style="font-weight:800">Líquido total ('+labelMesAno(comp)+')</span><span style="font-weight:800;font-size:17px" class="'+(totLiq<0?'v-neg':'v-liq')+'">'+brl(totLiq)+'</span></div>';
+  el.innerHTML=html;
+}
+function abrirDescOficial(salId, recId){
+  const r = recId? DB.recorrentes.find(x=>x.ID===recId) : null;
+  document.getElementById('modalT').textContent = r? 'Editar desconto oficial' : 'Novo desconto oficial';
+  document.getElementById('modalC').innerHTML =
+     '<input type="hidden" id="do-sal" value="'+esc(salId)+'"><input type="hidden" id="do-id" value="'+esc(recId||'')+'">'
+    +'<div class="grid full">'+fld('Descrição','<input id="do-desc" value="'+esc(r?(r.Descricao||''):'')+'" placeholder="Ex.: INSS, Imposto de renda, Previdência">')+'</div>'
+    +'<div class="grid full">'+fld('Valor mensal (R$)','<input id="do-valor" inputmode="decimal" value="'+(r?String(parseValor(r.ValorPadrao)).replace('.',','):'')+'">')+'</div>'
+    +'<div class="acoes"><button class="btn-ghost" onclick="fecharModal()">Cancelar</button><button class="btn green" id="do-save" onclick="salvarDescOficial()">Salvar</button></div>';
+  abrirModal();
+}
+async function salvarDescOficial(){
+  const salId=document.getElementById('do-sal').value, recId=document.getElementById('do-id').value;
+  const desc=document.getElementById('do-desc').value.trim();
+  const valor=parseValor(document.getElementById('do-valor').value);
+  if(!desc){ alert('Informe a descrição.'); return; }
+  if(!(valor>0)){ alert('Informe um valor maior que zero.'); return; }
+  const sal=DB.recorrentes.find(x=>x.ID===salId);
+  const reg={Perfil:(sal?(sal.Perfil||'JOÃO'):perfilAtivo),Tipo:'SAÍDA',Grupo:'DESCONTOS OFICIAIS',Descricao:desc,Categoria:'',Conta:'',ValorPadrao:valor,DiaVenc:'',VigenciaInicio:'',VigenciaFim:'',Ativo:'SIM',EmFolha:'SIM',SalarioRef:salId};
+  const btn=document.getElementById('do-save'); if(btn){ btn.disabled=true; btn.textContent='Salvando...'; }
+  let r;
+  if(recId){ reg.ID=recId; r=await chamar({acao:'editar',aba:'Recorrentes',registro:reg}); }
+  else { r=await chamar({acao:'salvar',aba:'Recorrentes',registro:reg}); }
+  if(r.ok){ toast('Desconto oficial salvo'); fecharModal(); await carregar(); }
+  else { if(btn){ btn.disabled=false; btn.textContent='Salvar'; } toast('Erro: '+(r.erro||'falha'),true); }
+}
+async function excluirDescOficial(recId){
+  const r=DB.recorrentes.find(x=>x.ID===recId); if(!r) return;
+  if(!confirm('Remover o desconto oficial "'+(r.Descricao||'')+'"?')) return;
+  const res=await chamar({acao:'excluir',aba:'Recorrentes',id:recId});
+  if(res.ok){ toast('Desconto removido'); await carregar(); } else toast('Erro: '+(res.erro||'falha'),true);
 }
 function eventos(){
   const evs=[];
@@ -879,7 +989,7 @@ function lancGasto(){
 }
 
 // ===== RENDER PRINCIPAL =====
-function renderTudo(){ renderPerfilSel(); renderMes(); renderFluxo(); renderLancReceita(); renderLancPagamento(); renderCompras(); renderFaturas(); renderRecorrentes(); renderExtrato(); renderMovimentos(); renderEmprestimos(); renderContasBancarias(); renderCartoesCad(); renderClassificacoes(); renderConfig(); }
+function renderTudo(){ renderPerfilSel(); renderMes(); renderFluxo(); renderLancReceita(); renderLancPagamento(); renderCompras(); renderFaturas(); renderRecorrentes(); renderExtrato(); renderContracheque(); renderMovimentos(); renderEmprestimos(); renderContasBancarias(); renderCartoesCad(); renderClassificacoes(); renderConfig(); }
 function toggleSidebar(){ const sb=document.getElementById('sidebar'); if(!sb) return; sb.classList.toggle('collapsed'); try{ localStorage.setItem('fp_sidebar', sb.classList.contains('collapsed')?'1':'0'); }catch(e){} }
 function aplicarSidebar(){ try{ if(localStorage.getItem('fp_sidebar')==='1'){ const sb=document.getElementById('sidebar'); if(sb) sb.classList.add('collapsed'); } }catch(e){} }
 
