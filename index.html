@@ -840,7 +840,7 @@ function renderContracheque(){
     const c=contrachequeSalario(sal, comp); totLiq+=c.liquido;
     html+='<div class="tbl-wrap" style="padding:16px;margin-bottom:16px">';
     html+='<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px"><div style="font-weight:700;font-size:15px">'+esc(sal.Descricao||'Salário')+'</div>'+(consolidado()?pill(sal.Perfil):'')+'<div style="flex:1"></div><div style="font-size:12px;color:#5B6B63">'+labelMesAno(comp)+'</div></div>';
-    html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 2px;font-weight:700"><span>Salário bruto</span><span class="v-in" style="font-size:15px">'+brl(c.bruto)+'</span></div>';
+    html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 2px;gap:8px"><span style="font-weight:700;flex:1">Salário bruto</span>'+btnEditCC('abrirRecorrente', sal.ID)+'<span class="v-in" style="font-weight:700;font-size:15px;min-width:120px;text-align:right">'+brl(c.bruto)+'</span></div>';
     // Descontos oficiais (editáveis aqui mesmo)
     html+=secaoCC('Descontos oficiais');
     if(c.oficiais.length) c.oficiais.forEach(o=> html+=linhaDescCC(o.nome, o.valor, btnEditCC('abrirDescOficial', sal.ID, o.id)+'<button class="btn-ghost" style="padding:2px 8px;font-size:12px" title="Remover" onclick=\'excluirDescOficial('+JSON.stringify(o.id)+')\'>🗑</button>'));
