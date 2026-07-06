@@ -1745,7 +1745,7 @@ function renderLancAvulso(tipo,elId){
   const ent=tipo==='ENTRADA', key='lanc-'+tipo, fn=ent?'renderLancReceita':'renderLancPagamento';
   getSort(key,'data',-1);
   arr=ordenarTab(arr,key,(m,col)=>{ switch(col){ case 'data':return dataOrd(m.Data); case 'comp':return m.Competencia||''; case 'cat':return ent?(m.Grupo||''):(m.Categoria||m.Grupo||''); case 'desc':return m.Descricao||''; case 'pessoa':return m.Perfil||''; case 'conta':return m.Conta||''; case 'valor':return parseValor(m.Valor); case 'status':return m.Status||''; default:return dataOrd(m.Data); } });
-  let h='<table class="grid"><thead><tr>'+thSort(key,'data','Data',false,fn)+thSort(key,'comp','Competência',false,fn)
+  let h='<table><thead><tr>'+thSort(key,'data','Data',false,fn)+thSort(key,'comp','Competência',false,fn)
     +thSort(key,'cat',(ent?'Grupo':'Categoria'),false,fn)+thSort(key,'desc','Descrição',false,fn)
     +(consolidado()?thSort(key,'pessoa','Pessoa',false,fn):'')+thSort(key,'conta','Conta',false,fn)+thSort(key,'valor','Valor',true,fn)
     +thSort(key,'status','Status',false,fn)+'<th></th></tr></thead><tbody>';
@@ -1774,7 +1774,7 @@ function renderGruposCad(){
   const arr=(DB.categorias||[]).filter(c=>nivelEh(c,'GRUPO'));
   arr.sort((a,b)=>String(a.Tipo||'').localeCompare(String(b.Tipo||''))||String(a.Nome||'').localeCompare(String(b.Nome||''),'pt-BR'));
   if(!arr.length){ el.innerHTML='<p class="vazio">Nenhum grupo cadastrado.</p>'; return; }
-  let h='<table class="grid"><thead><tr><th>Grupo</th><th>Tipo</th><th>Ativo</th><th></th></tr></thead><tbody>';
+  let h='<table><thead><tr><th>Grupo</th><th>Tipo</th><th>Ativo</th><th></th></tr></thead><tbody>';
   arr.forEach(c=>{
     const ent=String(c.Tipo||'').toUpperCase()==='ENTRADA';
     h+='<tr><td>'+esc(c.Nome||'')+'</td>'
@@ -1791,7 +1791,7 @@ function renderCategoriasCad(){
   const nomeGrupo=id=>{ const g=(DB.categorias||[]).find(x=>x.ID===id); return g?g.Nome:'(sem grupo)'; };
   arr.sort((a,b)=>String(nomeGrupo(a.GrupoRef)).localeCompare(String(nomeGrupo(b.GrupoRef)),'pt-BR')||String(a.Nome||'').localeCompare(String(b.Nome||''),'pt-BR'));
   if(!arr.length){ el.innerHTML='<p class="vazio">Nenhuma categoria cadastrada.</p>'; return; }
-  let h='<table class="grid"><thead><tr><th>Categoria</th><th>Grupo</th><th>Ativo</th><th></th></tr></thead><tbody>';
+  let h='<table><thead><tr><th>Categoria</th><th>Grupo</th><th>Ativo</th><th></th></tr></thead><tbody>';
   arr.forEach(c=>{
     h+='<tr><td>'+esc(c.Nome||'')+'</td>'
       +'<td>'+esc(nomeGrupo(c.GrupoRef))+'</td>'
@@ -1953,7 +1953,7 @@ function renderExtrato(){
       +'<span style="font-size:12.5px;color:#3F4F48">'+fechadas+' de '+dados.length+' conta(s) conciliada(s)'+(Math.abs(tDif)>=0.005?' · ajuste total <b>'+(tDif>0?'+':'')+brl(tDif)+'</b>':'')+'</span></div>';
   }
   // Conciliação por conta (você informa só o fechamento real de cada uma)
-  let porConta='<table class="grid"><thead><tr><th>Conta</th><th class="num">Abertura</th><th class="num">Entradas</th><th class="num">Saídas</th><th class="num">Fech. calc.</th><th class="num">Fech. real</th><th class="num">Dif.</th><th></th></tr></thead><tbody>';
+  let porConta='<table><thead><tr><th>Conta</th><th class="num">Abertura</th><th class="num">Entradas</th><th class="num">Saídas</th><th class="num">Fech. calc.</th><th class="num">Fech. real</th><th class="num">Dif.</th><th></th></tr></thead><tbody>';
   dados.forEach(d=>{
     porConta+='<tr><td>'+esc(d.nome)+'</td>'
       +'<td class="num '+(d.abertura<0?'v-neg':'')+'">'+brl(d.abertura)+'</td>'
@@ -1986,7 +1986,7 @@ function renderExtrato(){
   hist+='<tr class="ext-abertura"><td colspan="5">Fechamento calculado</td><td class="num '+(tCalc<0?'v-neg':'')+'">'+brl(tCalc)+'</td></tr>';
   if(todasFechadas && Math.abs(tDif)>=0.005) hist+='<tr class="ext-abertura"><td colspan="5">Ajuste de conciliação</td><td class="num"><b style="color:'+(tDif<0?'#DC2626':'#16A34A')+'">'+(tDif>0?'+':'')+brl(tDif)+'</b></td></tr>';
   if(todasFechadas) hist+='<tr class="ext-abertura"><td colspan="5"><b>Fechamento real</b></td><td class="num '+(tInf<0?'v-neg':'v-liq')+'"><b>'+brl(tInf)+'</b></td></tr>';
-  const histTbl='<table class="grid"><thead><tr><th>Data</th><th>Descrição</th><th>Conta</th><th class="num">Entrada</th><th class="num">Saída</th><th class="num">Saldo</th></tr></thead><tbody>'+hist+'</tbody></table>';
+  const histTbl='<table><thead><tr><th>Data</th><th>Descrição</th><th>Conta</th><th class="num">Entrada</th><th class="num">Saída</th><th class="num">Saldo</th></tr></thead><tbody>'+hist+'</tbody></table>';
   tbl.innerHTML='<div style="font-size:11px;font-weight:700;color:#5B6B63;text-transform:uppercase;letter-spacing:1px;margin:2px 0 8px">Conciliação por conta</div>'+porConta
     +'<div style="font-size:11px;font-weight:700;color:#5B6B63;text-transform:uppercase;letter-spacing:1px;margin:18px 0 8px">Movimentos do mês (Bancos)</div>'+histTbl;
 }
