@@ -2393,8 +2393,9 @@ function renderFaturas(){
       +'<th class="sortable" onclick="setFatSort(\'grupo\')">Grupo '+seta('grupo')+'</th>'
       +'<th class="sortable" onclick="setFatSort(\'data\')">Data da compra '+seta('data')+'</th>'
       +'<th class="num sortable" onclick="setFatSort(\'valor\')">Valor '+seta('valor')+'</th></tr></thead><tbody>';
+    // Ajustes sempre no topo da tabela (com editar + remover)
+    ajustes.forEach(a=>{ h+='<tr>'+(multi?'<td style="font-size:11px;color:#5B6B63">'+esc(a.Conta||'')+'</td>':'')+'<td>'+esc(a.Descricao)+' <span style="color:#D97706;font-size:10px;font-weight:700">AJUSTE</span></td><td>'+esc(a.Grupo)+'</td><td>—</td><td class="num">'+brl(parseValor(a.Valor))+' <button class="btn-ic" onclick=\'abrirAjusteFatura('+JSON.stringify(a.ID)+')\' title="Editar ajuste">✏️</button><button class="btn-ic" onclick=\'excluirRegRaw("Movimentos",'+JSON.stringify(a.ID)+')\' title="Remover ajuste">🗑️</button></td></tr>'; });
     parcelas.forEach(p=>{ h+='<tr>'+(multi?'<td style="font-size:11px;color:#5B6B63">'+esc(p.cartao)+'</td>':'')+'<td>'+esc(p.descricao)+'</td><td>'+esc(p.grupo)+'</td><td class="mono">'+esc(p.dataCompra)+'</td><td class="num">'+brl(p.valor)+'</td></tr>'; });
-    ajustes.forEach(a=>{ h+='<tr>'+(multi?'<td style="font-size:11px;color:#5B6B63">'+esc(a.Conta||'')+'</td>':'')+'<td>'+esc(a.Descricao)+' <span style="color:#D97706;font-size:10px;font-weight:700">AJUSTE</span></td><td>'+esc(a.Grupo)+'</td><td>—</td><td class="num">'+brl(parseValor(a.Valor))+' <button class="btn-ic" onclick=\'excluirRegRaw("Movimentos",'+JSON.stringify(a.ID)+')\' title="Remover ajuste">🗑️</button></td></tr>'; });
     pagtos.forEach(p=>{ h+='<tr style="background:#F0FDF4">'+(multi?'<td></td>':'')+'<td>↳ '+esc(p.Descricao||'Pagamento')+'</td><td>'+esc(p.Conta||'')+'</td><td class="mono">'+esc(p.Data||'')+'</td><td class="num" style="color:#15803D">−'+brl(parseValor(p.Valor))+' <button class="btn-ic" onclick=\'excluirRegRaw("Movimentos",'+JSON.stringify(p.ID)+')\' title="Estornar pagamento">🗑️</button></td></tr>'; });
     h+='</tbody></table>';
   }
@@ -2451,35 +2452,43 @@ function svgLinhas(series, meses){
   return '<div class="fat-chart-scroll" data-scroll="'+alvo+'" style="overflow-x:auto;border:1px solid #EEF2F0;border-radius:10px;padding:10px 8px 4px">'+s+'</div>'+leg
     +'<div style="font-size:10.5px;color:#8A968F;margin-top:4px">Passe o mouse nos pontos para ver cartão, competência e valor. Role para a direita pra ver meses futuros.</div>';
 }
-function abrirAjusteFatura(){
-  if(consolidado()){ alert('Selecione um perfil (João ou Lívia).'); return; }
+function abrirAjusteFatura(ajId){
   const cards=cardsFaturaPerfil();
   if(!cards.length){ alert('Cadastre um cartão primeiro.'); return; }
-  const selc=fatCartoesSelecionados(); const padrao=selc[0]||cards[0].Nome;
-  const comp=document.getElementById('fatComp').value||compAtual();
-  document.getElementById('modalT').textContent='Ajuste de fatura — '+compLabel(comp);
+  const m = ajId? (DB.movimentos||[]).find(x=>x.ID===ajId) : null;
+  if(!m && consolidado()){ alert('Selecione um perfil (João ou Lívia).'); return; }
+  const selc=fatCartoesSelecionados();
+  const padrao = m? (m.Conta||selc[0]||cards[0].Nome) : (selc[0]||cards[0].Nome);
+  const comp = m? (m.Competencia||document.getElementById('fatComp').value||compAtual()) : (document.getElementById('fatComp').value||compAtual());
+  const mig = m? !String(m.CompGasto||'').trim() : false;
+  document.getElementById('modalT').textContent=(m?'Editar ajuste de fatura — ':'Ajuste de fatura — ')+compLabel(comp);
   document.getElementById('modalC').innerHTML =
-    '<div style="font-size:12px;color:#5B6B63;margin-bottom:10px">Some (ou subtraia) um valor para a fatura bater com o valor do cartão. Entra no caixa nesse mês.</div>'
+    '<input type="hidden" id="aj-id" value="'+esc(ajId||'')+'"><input type="hidden" id="aj-comp" value="'+esc(comp)+'">'
+   +'<div style="font-size:12px;color:#5B6B63;margin-bottom:10px">Some (ou subtraia) um valor para a fatura bater com o valor do cartão. Entra no caixa nesse mês.</div>'
    +'<div class="grid">'
      +fld('Cartão','<select id="aj-cartao">'+cards.map(c=>opt(c.Nome,padrao)).join('')+'</select>')
-     +fld('Grupo','<select id="aj-grupo">'+GRUPOS_SAIDA.map(g=>opt(g,'AJUSTE CARTÃO')).join('')+'</select>')
+     +fld('Grupo','<select id="aj-grupo">'+GRUPOS_SAIDA.map(g=>opt(g,m?(m.Grupo||'AJUSTE CARTÃO'):'AJUSTE CARTÃO')).join('')+'</select>')
    +'</div>'
-   +'<div class="grid full">'+fld('Descrição','<input id="aj-desc" placeholder="Ex.: Juros / rotativo / compra que não entrou">')+'</div>'
-   +'<div class="grid full">'+fld('Valor (R$ — use negativo para abater)','<input id="aj-valor" inputmode="decimal" placeholder="ex.: 120,50 ou -50">')+'</div>'
-   +'<label style="display:flex;gap:8px;align-items:flex-start;font-size:11.5px;color:#5B6B63;margin:2px 2px 4px"><input type="checkbox" id="aj-mig" style="margin-top:2px"><span><b>Migração</b> — o gasto já aconteceu antes; contar só no caixa (entra na fatura/banco neste mês, mas fica fora do regime de gasto). Marque ao trazer parcelamentos antigos.</span></label>'
-   +'<div class="acoes"><button class="btn-ghost" onclick="fecharModal()">Cancelar</button><button class="btn green" id="aj-save" onclick="salvarAjusteFatura()">Adicionar ajuste</button></div>';
+   +'<div class="grid full">'+fld('Descrição','<input id="aj-desc" value="'+esc(m?(m.Descricao||''):'')+'" placeholder="Ex.: Juros / rotativo / compra que não entrou">')+'</div>'
+   +'<div class="grid full">'+fld('Valor (R$ — use negativo para abater)','<input id="aj-valor" inputmode="decimal" value="'+(m?String(parseValor(m.Valor)).replace('.',','):'')+'" placeholder="ex.: 120,50 ou -50">')+'</div>'
+   +'<label style="display:flex;gap:8px;align-items:flex-start;font-size:11.5px;color:#5B6B63;margin:2px 2px 4px"><input type="checkbox" id="aj-mig"'+(mig?' checked':'')+' style="margin-top:2px"><span><b>Migração</b> — o gasto já aconteceu antes; contar só no caixa (entra na fatura/banco neste mês, mas fica fora do regime de gasto). Marque ao trazer parcelamentos antigos.</span></label>'
+   +'<div class="acoes"><button class="btn-ghost" onclick="fecharModal()">Cancelar</button><button class="btn green" id="aj-save" onclick="salvarAjusteFatura()">'+(m?'Salvar ajuste':'Adicionar ajuste')+'</button></div>';
   abrirModal();
 }
 async function salvarAjusteFatura(){
+  const ajId=(document.getElementById('aj-id')||{}).value||'';
   const cardName=document.getElementById('aj-cartao').value;
-  const comp=document.getElementById('fatComp').value||compAtual();
+  const comp=(document.getElementById('aj-comp')||{}).value||document.getElementById('fatComp').value||compAtual();
   const desc=document.getElementById('aj-desc').value.trim()||'Ajuste de fatura';
   const valor=parseValor(document.getElementById('aj-valor').value);
   const grupo=document.getElementById('aj-grupo').value;
   const mig=!!(document.getElementById('aj-mig')&&document.getElementById('aj-mig').checked);
   if(!valor){ alert('Informe o valor (pode ser negativo).'); return; }
-  const descFinal = mig ? (desc==='Ajuste de fatura' ? 'Migração de fatura' : desc+' (migração)') : desc;
-  const reg={Perfil:perfilAtivo,Competencia:comp,CompGasto:mig?'':comp,Data:'',Tipo:'SAÍDA',Grupo:grupo,Categoria:'AJUSTE',Conta:cardName,Descricao:descFinal,Valor:valor,Status:'PREVISTO',Origem:'AJUSTE',Ref:'FAT:'+cardName+':'+comp};
+  const orig = ajId? (DB.movimentos||[]).find(x=>x.ID===ajId) : null;
+  // Na edição, usa a descrição como digitada (sem re-anexar "(migração)"); só o novo aplica o sufixo.
+  const descFinal = (!ajId && mig) ? (desc==='Ajuste de fatura' ? 'Migração de fatura' : desc+' (migração)') : desc;
+  const reg={Perfil:(orig?(orig.Perfil||'JOÃO'):perfilAtivo),Competencia:comp,CompGasto:mig?'':comp,Data:(orig?(orig.Data||''):''),Tipo:'SAÍDA',Grupo:grupo,Categoria:'AJUSTE',Conta:cardName,Descricao:descFinal,Valor:valor,Status:(orig?(orig.Status||'PREVISTO'):'PREVISTO'),Origem:'AJUSTE',Ref:'FAT:'+cardName+':'+comp};
+  if(ajId) reg.ID=ajId;
   await salvarReg('Movimentos',reg,'aj-save');
 }
 
