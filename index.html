@@ -956,7 +956,8 @@ function eventos(){
     const og=String(m.Origem||'').toUpperCase();
     if(og==='AJUSTE_MES') return;   // só ajusta valor de outro item; não é lançamento próprio
     if(og==='FECHOBANCO') return;   // fato de saldo informado do banco; não é receita/despesa
-    if(og==='CONCILIACAO'||og==='CONCILIAÇÃO') return; // conciliação por-banco antiga (aposentada); só vale o ajuste geral (AJUSTE_BANCOS)
+    if(og==='CONCILIACAO'||og==='CONCILIAÇÃO') return; // conciliação por-banco antiga (aposentada)
+    if(og==='AJUSTE_BANCOS') return; // ajuste geral não gera mais receita/despesa (não contaminar os números)
     evs.push({tipo:m.Tipo||'SAÍDA',grupo:m.Grupo||'OUTROS',categoria:m.Categoria||'',perfil:m.Perfil||'JOÃO',conta:m.Conta||'',
       descricao:m.Descricao||'',valor:parseValor(m.Valor),status:m.Status||'PAGO',origem:m.Origem||'MANUAL',
       ref:m.Ref||'', compGasto:(m.CompGasto||''), compCaixa:(m.Competencia||''), fonte:false, movId:m.ID, data:(m.Data||'')});
@@ -1089,8 +1090,8 @@ function chaveOrdMes(l){
   return d? new Date(+d[3],+d[2]-1,+d[1]).getTime() : 0;
 }
 function ordMesCmp(a,b){ return chaveOrdMes(b)-chaveOrdMes(a); }
-// Data do pagamento na 1ª coluna (só quando já pago/recebido).
-function dataPagCel(l){ const st=(l.status||'PREVISTO').toUpperCase(); return (st!=='PREVISTO' && l.data) ? '<span class="mono" style="color:#5B6B63;font-size:11px">'+esc(l.data)+'</span> ' : ''; }
+// Célula da coluna "Data" (1ª coluna) — mostra a data do pagamento quando já pago/recebido.
+function tdDataMes(l){ const st=(l.status||'PREVISTO').toUpperCase(); return '<td class="mono" style="white-space:nowrap;color:#5B6B63">'+((st!=='PREVISTO'&&l.data)?esc(l.data):'')+'</td>'; }
 // Botão de edição do pagamento: avulso abre o editor manual; baixa de fonte abre o editor focado (valor/data/conta).
 function btnEditarPag(l){
   if(!l.movId) return '';
@@ -1108,7 +1109,7 @@ function linhaMes(l,i){
     const ajBtn = l._ajRef? '<button class="btn-ic" title="Ajustar o valor só deste mês" onclick=\'abrirAjusteMes('+JSON.stringify(l._ajRef)+','+JSON.stringify(l.descricao||'')+','+l.valor+')\'>✏️</button> ':'';
     acaoCell=ajBtn+'<button class="btn-ic" style="background:#16A34A;color:#fff;border-color:#16A34A" onclick="abrirPagarDespesa('+i+')">'+(l.tipo==='ENTRADA'?'Receber':'Pagar')+'</button>';
   }
-  return '<tr><td>'+dataPagCel(l)+esc(l.descricao)+'</td><td>'+esc(l.grupo)+'</td><td>'+pill(l.perfil)+'</td><td class="num">'+brl(l.valor)+'</td><td>'+statusCell+'</td><td>'+acaoCell+'</td></tr>';
+  return '<tr>'+tdDataMes(l)+'<td>'+esc(l.descricao)+'</td><td>'+esc(l.grupo)+'</td><td>'+pill(l.perfil)+'</td><td class="num">'+brl(l.valor)+'</td><td>'+statusCell+'</td><td>'+acaoCell+'</td></tr>';
 }
 function secaoMes(t,bg,fg){ return '<div style="background:'+bg+';color:'+fg+';font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.7px;padding:9px 14px;border-radius:10px;margin:16px 0 8px">'+esc(t)+'</div>'; }
 function caixaMes(chave, itens, cor, rotulo){
@@ -1122,7 +1123,7 @@ function caixaMes(chave, itens, cor, rotulo){
     +'<span class="grp-cont">'+feitos+'/'+itens.length+'</span>'
     +'<span class="grp-tot" style="color:'+cor+'">'+brl(total)+'</span></div>';
   if(aberto){
-    h+='<div class="grp-body"><table><thead><tr><th>Descrição</th><th>Grupo</th><th>Pessoa</th><th class="num">Valor</th><th>Status</th><th></th></tr></thead><tbody>';
+    h+='<div class="grp-body"><table><thead><tr><th>Data</th><th>Descrição</th><th>Grupo</th><th>Pessoa</th><th class="num">Valor</th><th>Status</th><th></th></tr></thead><tbody>';
     itens.forEach(l=>h+=linhaMes(l,l._i));
     h+='</tbody></table></div>';
   }
@@ -1141,7 +1142,7 @@ function caixaMesEntradas(itens){
     +'<span class="grp-cont">'+feitos+'/'+itens.length+'</span>'
     +'<span class="grp-tot" style="color:#16A34A">'+brl(total)+'</span></div>';
   if(aberto){
-    h+='<div class="grp-body"><table><thead><tr><th>Descrição</th><th>Grupo</th><th>Pessoa</th><th class="num">Valor</th><th>Status</th><th></th></tr></thead><tbody>';
+    h+='<div class="grp-body"><table><thead><tr><th>Data</th><th>Descrição</th><th>Grupo</th><th>Pessoa</th><th class="num">Valor</th><th>Status</th><th></th></tr></thead><tbody>';
     itens.forEach(l=>{ h += (l._descRows && l._descRows.length) ? linhaSalario(l) : linhaMes(l,l._i); });
     h+='</tbody></table></div>';
   }
@@ -1155,18 +1156,19 @@ function linhaSalario(l){
     ? btnEditarPag(l)+'<button class="btn-ic" onclick=\'desfazerItem('+l._i+')\' title="Desfazer">↩︎</button>'
     : '<button class="btn-ic" style="background:#16A34A;color:#fff;border-color:#16A34A" onclick="abrirReceberSalario('+l._i+')" title="Receber o líquido">Receber líq.</button>';
   let h='<tr style="cursor:pointer" onclick=\'toggleSalario('+JSON.stringify(rid)+')\' title="Clique para ver bruto, descontos e ajustar">'
-    +'<td><span style="color:#16A34A">'+(ab?'▾':'▸')+'</span> '+dataPagCel(l)+esc(l.descricao)
+    +tdDataMes(l)
+    +'<td><span style="color:#16A34A">'+(ab?'▾':'▸')+'</span> '+esc(l.descricao)
       +'<div style="font-size:11px;color:#5B6B63;margin-top:2px">bruto '+brl(l._bruto)+' · −'+brl(l._consig)+' descontos ('+l._pct.toFixed(1).replace('.',',')+'%) · <span style="color:#2E5FA3;text-decoration:underline">'+(ab?'ocultar':'ver / ajustar')+'</span></div></td>'
     +'<td>SALÁRIO</td><td>'+pill(l.perfil)+'</td>'
     +'<td class="num" style="font-weight:700;color:#16A34A">'+brl(l.valor)+'<div style="font-size:10px;color:#5B6B63;font-weight:400">líquido</div></td>'
     +'<td>'+stCell+'</td><td onclick="event.stopPropagation()">'+acao+'</td></tr>';
   if(ab){
     const btnAj=(ref,label,val,titulo)=>'<button class="btn-ic" title="'+titulo+'" onclick=\'event.stopPropagation();abrirAjusteMes('+JSON.stringify(ref)+','+JSON.stringify(label)+','+val+')\'>✏️</button>';
-    h+='<tr style="background:#FAFCFB"><td style="padding-left:26px;color:#16A34A;font-size:12px;font-weight:600">Salário bruto'+(l._brutoAj?' <span style="color:#C026D3">• ajustado</span>':'')+'</td><td></td><td></td><td class="num" style="color:#16A34A">'+brl(l._bruto)+'</td><td></td><td onclick="event.stopPropagation()">'+(l._brutoRef?btnAj(l._brutoRef,'Salário bruto — '+(l.descricao||''),l._bruto,'Ajustar o bruto deste mês'):'')+'</td></tr>';
+    h+='<tr style="background:#FAFCFB"><td></td><td style="padding-left:26px;color:#16A34A;font-size:12px;font-weight:600">Salário bruto'+(l._brutoAj?' <span style="color:#C026D3">• ajustado</span>':'')+'</td><td></td><td></td><td class="num" style="color:#16A34A">'+brl(l._bruto)+'</td><td></td><td onclick="event.stopPropagation()">'+(l._brutoRef?btnAj(l._brutoRef,'Salário bruto — '+(l.descricao||''),l._bruto,'Ajustar o bruto deste mês'):'')+'</td></tr>';
     (l._descRows||[]).forEach(d=>{
-      h+='<tr style="background:#FAFCFB"><td style="padding-left:26px;color:#5B6B63;font-size:12px">• '+esc(d.descricao)+(d.ajustado?' <span style="color:#C026D3">• ajustado</span>':'')+'</td><td></td><td></td><td class="num" style="color:#DC2626">−'+brl(d.valor)+'</td><td></td><td onclick="event.stopPropagation()">'+(d.ref?btnAj(d.ref,d.descricao||'Desconto',d.valor,'Ajustar este desconto neste mês'):'')+'</td></tr>';
+      h+='<tr style="background:#FAFCFB"><td></td><td style="padding-left:26px;color:#5B6B63;font-size:12px">• '+esc(d.descricao)+(d.ajustado?' <span style="color:#C026D3">• ajustado</span>':'')+'</td><td></td><td></td><td class="num" style="color:#DC2626">−'+brl(d.valor)+'</td><td></td><td onclick="event.stopPropagation()">'+(d.ref?btnAj(d.ref,d.descricao||'Desconto',d.valor,'Ajustar este desconto neste mês'):'')+'</td></tr>';
     });
-    h+='<tr style="background:#FAFCFB"><td style="padding-left:26px;font-size:12px;font-weight:700">Líquido</td><td></td><td></td><td class="num" style="font-weight:700;color:#16A34A">'+brl(l.valor)+'</td><td></td><td></td></tr>';
+    h+='<tr style="background:#FAFCFB"><td></td><td style="padding-left:26px;font-size:12px;font-weight:700">Líquido</td><td></td><td></td><td class="num" style="font-weight:700;color:#16A34A">'+brl(l.valor)+'</td><td></td><td></td></tr>';
   }
   return h;
 }
@@ -2008,7 +2010,7 @@ function renderExtrato(){
   if(concEl){
     concEl.innerHTML='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:'+(todasFechadas?'#ECFDF3':'#FFF8E6')+';border:1px solid '+(todasFechadas?'#BBE9CB':'#F2D6A6')+';border-radius:10px;padding:10px 14px">'
       +'<span style="font-weight:700;color:'+(todasFechadas?'#166534':'#B45309')+'">'+(todasFechadas?'🔒 Mês fechado':'🔓 Mês aberto')+'</span>'
-      +'<span style="font-size:12.5px;color:#3F4F48">'+fechadas+' de '+dados.length+' conta(s) informada(s)'+(todasFechadas&&Math.abs(tDif)>=0.005?' · ajuste geral <b>'+(tDif>0?'+':'')+brl(tDif)+'</b>':'')+'</span></div>';
+      +'<span style="font-size:12.5px;color:#3F4F48">'+fechadas+' de '+dados.length+' conta(s) informada(s)'+(todasFechadas&&Math.abs(tDif)>=0.005?' · diferença <b>'+(tDif>0?'+':'')+brl(tDif)+'</b> (só informativa)':'')+'</span></div>';
   }
   // Conciliação por conta (você informa só o fechamento real de cada uma)
   let porConta='<table><thead><tr><th>Conta</th><th class="num">Abertura</th><th class="num">Entradas</th><th class="num">Saídas</th><th class="num">Fech. calc.</th><th class="num">Fech. real</th><th class="num">Dif.</th><th></th></tr></thead><tbody>';
@@ -2053,7 +2055,7 @@ function renderExtrato(){
   });
   if(!pooled.length) hist+='<tr><td colspan="6" class="vazio">Nenhuma movimentação realizada neste mês.</td></tr>';
   hist+='<tr class="ext-abertura"><td colspan="5">Fechamento calculado</td><td class="num '+(tCalc<0?'v-neg':'')+'">'+brl(tCalc)+'</td></tr>';
-  if(todasFechadas && Math.abs(tDif)>=0.005) hist+='<tr class="ext-abertura"><td colspan="5">Ajuste geral (bancos) — net de todos os bancos</td><td class="num"><b style="color:'+(tDif<0?'#DC2626':'#16A34A')+'">'+(tDif>0?'+':'')+brl(tDif)+'</b></td></tr>';
+  if(todasFechadas && Math.abs(tDif)>=0.005) hist+='<tr class="ext-abertura"><td colspan="5">Diferença real × calculado (só informativa — não vira lançamento)</td><td class="num"><b style="color:'+(tDif<0?'#DC2626':'#16A34A')+'">'+(tDif>0?'+':'')+brl(tDif)+'</b></td></tr>';
   if(todasFechadas) hist+='<tr class="ext-abertura"><td colspan="5"><b>Fechamento real</b></td><td class="num '+(tInf<0?'v-neg':'v-liq')+'"><b>'+brl(tInf)+'</b></td></tr>';
   const histTbl='<table><thead><tr><th>Data</th><th>Descrição</th><th>Conta</th><th class="num">Entrada</th><th class="num">Saída</th><th class="num">Saldo</th></tr></thead><tbody>'+hist+'</tbody></table>';
   tbl.innerHTML='<div style="font-size:11px;font-weight:700;color:#5B6B63;text-transform:uppercase;letter-spacing:1px;margin:2px 0 8px">Conciliação por conta</div>'+porConta
@@ -2075,7 +2077,7 @@ function abrirConciliar(nome, comp){
     +'<div style="background:#F6F8FA;border-radius:8px;padding:10px;font-size:12.5px;margin-bottom:10px">Saldo calculado pelo app: <b id="conc-calc">'+brl(calc)+'</b></div>'
     +'<div class="grid full">'+fld('Saldo REAL no banco (fim de '+labelMesAno(comp)+')','<input id="conc-real" inputmode="decimal" value="'+String(realAtual).replace('.',',')+'" oninput="previewConc()">')+'</div>'
     +'<div id="conc-diff" style="font-size:12.5px;margin:2px 2px 8px"></div>'
-    +'<p style="font-size:11px;color:#8A968F;margin:2px 2px 8px">A diferença por banco entra num <b>ajuste geral</b> (soma de todos os bancos), criado só quando todos forem informados. Transferência entre seus bancos se anula e não infla receitas/despesas.</p>'
+    +'<p style="font-size:11px;color:#8A968F;margin:2px 2px 8px">O saldo informado vira a <b>abertura do mês seguinte</b>. A diferença para o calculado é só <b>informativa</b> — <b>não gera</b> lançamento de receita/despesa.</p>'
     +'<div class="acoes"><button class="btn-ghost" onclick="fecharModal()">Cancelar</button><button class="btn green" id="conc-save" onclick="salvarConciliacao()">Salvar fechamento</button></div>';
   abrirModal(); previewConc();
 }
@@ -2084,7 +2086,7 @@ function previewConc(){
   const real=parseValor(document.getElementById('conc-real').value);
   const diff=real-calc, el=document.getElementById('conc-diff');
   if(Math.abs(diff)<0.005) el.innerHTML='<span style="color:#16A34A">Bate certinho — sem diferença. ✓</span>';
-  else el.innerHTML='Diferença desta conta: <b style="color:'+(diff<0?'#DC2626':'#16A34A')+'">'+(diff>0?'+':'')+brl(diff)+'</b> <span style="color:#5B6B63">(entra no ajuste geral do mês)</span>';
+  else el.innerHTML='Diferença desta conta: <b style="color:'+(diff<0?'#DC2626':'#16A34A')+'">'+(diff>0?'+':'')+brl(diff)+'</b> <span style="color:#5B6B63">(só informativo — não vira lançamento)</span>';
 }
 async function salvarConciliacao(){
   const nome=document.getElementById('conc-conta').value, comp=document.getElementById('conc-comp').value;
@@ -2100,27 +2102,11 @@ async function salvarConciliacao(){
   await recomputarAjusteBancos(perfilConta, comp, {[nome]: real});
   toast('Fechamento informado'); fecharModal(); await carregar();
 }
-// Cria/atualiza/remove o ajuste geral (net) do perfil no mês. `override` = {conta: saldoReal|null} pra
-// refletir a mudança que acabou de ser salva sem depender do reload.
+// NÃO gera mais lançamento de ajuste (contaminava receitas/despesas). A abertura do mês seguinte
+// já vem do fechamento informado. Aqui só limpamos qualquer ajuste geral antigo que exista.
 async function recomputarAjusteBancos(perfil, comp, override){
-  override=override||{};
-  const contasP=(DB.contas||[]).filter(c=>mesmoPerfil(c.Perfil, perfil));
-  if(!contasP.length) return;
-  let todos=true, net=0;
-  contasP.forEach(c=>{
-    const real = (c.Nome in override)? override[c.Nome] : (fechoFato(c.Nome,comp)? parseValor(fechoFato(c.Nome,comp).Valor) : null);
-    if(real==null){ todos=false; return; }
-    net += real - bancoConta(c.Nome, comp).calc;
-  });
-  net=Math.round(net*100)/100;
   const existente=ajusteBancosMov(perfil, comp);
-  if(todos && Math.abs(net)>=0.005){
-    const reg={Conta:'',Perfil:perfil,Competencia:comp,CompGasto:'',Data:diaFimMes(comp),Tipo:net>=0?'ENTRADA':'SAÍDA',Grupo:'CONCILIAÇÃO',Categoria:'',Descricao:'Ajuste de conciliação (bancos) — '+labelMesAno(comp),Valor:Math.abs(net),Status:'PAGO',Origem:'AJUSTE_BANCOS',Ref:refAjusteBancos(perfil,comp)};
-    if(existente){ reg.ID=existente.ID; await chamar({acao:'editar',aba:'Movimentos',registro:reg}); }
-    else { await chamar({acao:'salvar',aba:'Movimentos',registro:reg}); }
-  } else if(existente){
-    await chamar({acao:'excluir',aba:'Movimentos',id:existente.ID});
-  }
+  if(existente){ await chamar({acao:'excluir',aba:'Movimentos',id:existente.ID}); }
 }
 async function reabrirMes(nome, comp){
   const fato=fechoFato(nome, comp); if(!fato) return;
