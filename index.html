@@ -956,7 +956,7 @@ function eventos(){
     if(String(m.Origem||'').toUpperCase()==='AJUSTE_MES') return; // só ajusta valor de outro item; não é lançamento próprio
     evs.push({tipo:m.Tipo||'SAÍDA',grupo:m.Grupo||'OUTROS',categoria:m.Categoria||'',perfil:m.Perfil||'JOÃO',conta:m.Conta||'',
       descricao:m.Descricao||'',valor:parseValor(m.Valor),status:m.Status||'PAGO',origem:m.Origem||'MANUAL',
-      ref:m.Ref||'', compGasto:(m.CompGasto||''), compCaixa:(m.Competencia||''), fonte:false, movId:m.ID});
+      ref:m.Ref||'', compGasto:(m.CompGasto||''), compCaixa:(m.Competencia||''), fonte:false, movId:m.ID, data:(m.Data||'')});
   });
   return evs;
 }
@@ -1078,18 +1078,34 @@ function popularSeletorMes(){
 }
 function mesCompAtual(){ const el=document.getElementById('mesComp'); if(!el.options.length) popularSeletorMes(); const INI=inicioControle(); if(!el.value) el.value=(INI&&INI>compAtual())?INI:compAtual(); return el.value; }
 function mudarMes(d){ const el=document.getElementById('mesComp'); const novo=compAdd(el.value||compAtual(),d); if([...el.options].some(o=>o.value===novo)){ el.value=novo; renderMes(); } }
+// Ordenação dentro dos grupos do Mês: previstos no topo; pagos por data (mais recente em cima).
+function chaveOrdMes(l){
+  const pago = String(l.status||'PREVISTO').toUpperCase()!=='PREVISTO';
+  if(!pago) return Number.MAX_SAFE_INTEGER;
+  const d=String(l.data||'').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return d? new Date(+d[3],+d[2]-1,+d[1]).getTime() : 0;
+}
+function ordMesCmp(a,b){ return chaveOrdMes(b)-chaveOrdMes(a); }
+// Data do pagamento na 1ª coluna (só quando já pago/recebido).
+function dataPagCel(l){ const st=(l.status||'PREVISTO').toUpperCase(); return (st!=='PREVISTO' && l.data) ? '<span class="mono" style="color:#5B6B63;font-size:11px">'+esc(l.data)+'</span> ' : ''; }
+// Botão de edição do pagamento: avulso abre o editor manual; baixa de fonte abre o editor focado (valor/data/conta).
+function btnEditarPag(l){
+  if(!l.movId) return '';
+  const fn = l.ref ? ('abrirEditarPagamento('+l._i+')') : ('abrirMovimento('+JSON.stringify(l.movId)+')');
+  return '<button class="btn-ic" onclick=\''+fn+'\' title="Editar pagamento">✏️</button> ';
+}
 function linhaMes(l,i){
   const st=(l.status||'PREVISTO').toUpperCase();
   let statusCell, acaoCell;
   if(l.origem==='CONSIGNADO'){ statusCell='<span class="pill p-comum">em folha</span>'; acaoCell='<span style="font-size:11px;color:#5B6B63">automático</span>'; }
-  else if(st==='PAGO'){ statusCell='<span class="pill p-pago">'+(l.tipo==='ENTRADA'?'RECEBIDO':'PAGO')+'</span>'; acaoCell='<span style="font-size:11px;color:#5B6B63">'+esc(l.conta||'—')+'</span> <button class="btn-ic" onclick=\'desfazerItem('+i+')\' title="Desfazer">↩︎</button>'; }
+  else if(st==='PAGO'){ statusCell='<span class="pill p-pago">'+(l.tipo==='ENTRADA'?'RECEBIDO':'PAGO')+'</span>'; acaoCell='<span style="font-size:11px;color:#5B6B63">'+esc(l.conta||'—')+'</span> '+btnEditarPag(l)+'<button class="btn-ic" onclick=\'desfazerItem('+i+')\' title="Desfazer">↩︎</button>'; }
   else if(st==='PAGO_CARTAO'){ statusCell='<span class="pill p-comum">pago c/ cartão</span>'; acaoCell='<button class="btn-ic" onclick=\'desfazerItem('+i+')\' title="Desfazer">↩︎</button>'; }
   else {
     statusCell='<span class="pill p-prev">PREVISTO</span>'+(l._ajustado?' <span style="color:#C026D3;font-size:10px">• ajustado</span>':'');
     const ajBtn = l._ajRef? '<button class="btn-ic" title="Ajustar o valor só deste mês" onclick=\'abrirAjusteMes('+JSON.stringify(l._ajRef)+','+JSON.stringify(l.descricao||'')+','+l.valor+')\'>✏️</button> ':'';
     acaoCell=ajBtn+'<button class="btn-ic" style="background:#16A34A;color:#fff;border-color:#16A34A" onclick="abrirPagarDespesa('+i+')">'+(l.tipo==='ENTRADA'?'Receber':'Pagar')+'</button>';
   }
-  return '<tr><td>'+esc(l.descricao)+'</td><td>'+esc(l.grupo)+'</td><td>'+pill(l.perfil)+'</td><td class="num">'+brl(l.valor)+'</td><td>'+statusCell+'</td><td>'+acaoCell+'</td></tr>';
+  return '<tr><td>'+dataPagCel(l)+esc(l.descricao)+'</td><td>'+esc(l.grupo)+'</td><td>'+pill(l.perfil)+'</td><td class="num">'+brl(l.valor)+'</td><td>'+statusCell+'</td><td>'+acaoCell+'</td></tr>';
 }
 function secaoMes(t,bg,fg){ return '<div style="background:'+bg+';color:'+fg+';font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.7px;padding:9px 14px;border-radius:10px;margin:16px 0 8px">'+esc(t)+'</div>'; }
 function caixaMes(chave, itens, cor, rotulo){
@@ -1133,10 +1149,10 @@ function linhaSalario(l){
   const st=(l.status||'PREVISTO').toUpperCase();
   const stCell = st!=='PREVISTO' ? '<span class="pill p-pago">RECEBIDO</span>' : '<span class="pill p-prev">PREVISTO</span>';
   const acao = st!=='PREVISTO'
-    ? '<button class="btn-ic" onclick=\'desfazerItem('+l._i+')\' title="Desfazer">↩︎</button>'
+    ? btnEditarPag(l)+'<button class="btn-ic" onclick=\'desfazerItem('+l._i+')\' title="Desfazer">↩︎</button>'
     : '<button class="btn-ic" style="background:#16A34A;color:#fff;border-color:#16A34A" onclick="abrirReceberSalario('+l._i+')" title="Receber o líquido">Receber líq.</button>';
   let h='<tr style="cursor:pointer" onclick=\'toggleSalario('+JSON.stringify(rid)+')\' title="Clique para ver bruto, descontos e ajustar">'
-    +'<td><span style="color:#16A34A">'+(ab?'▾':'▸')+'</span> '+esc(l.descricao)
+    +'<td><span style="color:#16A34A">'+(ab?'▾':'▸')+'</span> '+dataPagCel(l)+esc(l.descricao)
       +'<div style="font-size:11px;color:#5B6B63;margin-top:2px">bruto '+brl(l._bruto)+' · −'+brl(l._consig)+' descontos ('+l._pct.toFixed(1).replace('.',',')+'%) · <span style="color:#2E5FA3;text-decoration:underline">'+(ab?'ocultar':'ver / ajustar')+'</span></div></td>'
     +'<td>SALÁRIO</td><td>'+pill(l.perfil)+'</td>'
     +'<td class="num" style="font-weight:700;color:#16A34A">'+brl(l.valor)+'<div style="font-size:10px;color:#5B6B63;font-weight:400">líquido</div></td>'
@@ -1227,6 +1243,8 @@ function renderMes(){
   const LABEL_MES={'Recorrentes':'Pagamentos Recorrentes','Pagamentos/Compras':'Outros Pagamentos','Empréstimos':'Empréstimos'};
   const gs={}; ordem.forEach(g=>gs[g]=[]);
   saidas.forEach(l=>{ gs[grupoOrigemSaida(l.origem)].push(l); });
+  ordem.forEach(g=> gs[g].sort(ordMesCmp));
+  entradas.sort(ordMesCmp);
   let h = secaoMes('ENTRADAS','#DCFCE7','#166534') + caixaMesEntradas(entradas);
   h += secaoMes('SAÍDAS','#FEF0CD','#B45309');
   h += caixaMesFaturas(faturas, comp);
@@ -1240,6 +1258,31 @@ async function desfazerItem(i){
   if(!l.ref && !confirm('Este é um lançamento manual. Excluir de vez?')) return;
   const r = await chamar({acao:'excluir',aba:'Movimentos',id:l.movId});
   if(r.ok){ toast(l.ref?'Baixa desfeita':'Excluído'); await carregar(); } else toast('Erro: '+(r.erro||'falha'),true);
+}
+// Editar o pagamento de uma baixa de fonte (recorrente/parcela/empréstimo): só valor, data e conta.
+// Preserva Origem/Ref/Tipo/Grupo/Competência (o backend mantém os campos não enviados).
+function abrirEditarPagamento(i){
+  const l=window._mesItens[i]; if(!l||!l.movId) return;
+  const m=(DB.movimentos||[]).find(x=>x.ID===l.movId); if(!m) return;
+  document.getElementById('modalT').textContent='Editar pagamento';
+  document.getElementById('modalC').innerHTML=
+     '<input type="hidden" id="ep-id" value="'+esc(m.ID)+'">'
+    +'<div style="font-size:12px;color:#5B6B63;margin-bottom:10px">'+esc(m.Descricao||'')+'</div>'
+    +'<div class="grid">'
+      +fld('Valor (R$)','<input id="ep-valor" inputmode="decimal" value="'+String(parseValor(m.Valor)).replace('.',',')+'">')
+      +fld('Data do pagamento','<input type="date" id="ep-data" value="'+paraDate(m.Data)+'">')
+    +'</div>'
+    +'<div class="grid full">'+fld('Conta','<select id="ep-conta">'+optsContas(m.Conta)+'</select>')+'</div>'
+    +'<div class="acoes"><button class="btn-ghost" onclick="fecharModal()">Cancelar</button><button class="btn green" id="ep-save" onclick="salvarEditarPagamento()">Salvar</button></div>';
+  abrirModal();
+}
+async function salvarEditarPagamento(){
+  const id=document.getElementById('ep-id').value;
+  const valor=parseValor(document.getElementById('ep-valor').value);
+  const data=deDate(document.getElementById('ep-data').value);
+  const conta=document.getElementById('ep-conta').value;
+  if(!(valor>0)){ alert('Informe um valor maior que zero.'); return; }
+  await salvarReg('Movimentos',{ID:id,Valor:valor,Data:data,Conta:conta},'ep-save');
 }
 
 function avatarHtml(p){
