@@ -953,7 +953,10 @@ function eventos(){
   // Movimentos (baixas, avulsos, ajustes, entradas PIX, marcadores PAGO_CARTAO).
   // compCaixa = m.Competencia (vazio = fora do caixa); compGasto = m.CompGasto (vazio = fora do gasto).
   DB.movimentos.forEach(m=>{
-    if(String(m.Origem||'').toUpperCase()==='AJUSTE_MES') return; // só ajusta valor de outro item; não é lançamento próprio
+    const og=String(m.Origem||'').toUpperCase();
+    if(og==='AJUSTE_MES') return;   // só ajusta valor de outro item; não é lançamento próprio
+    if(og==='FECHOBANCO') return;   // fato de saldo informado do banco; não é receita/despesa
+    if(og==='CONCILIACAO'||og==='CONCILIAÇÃO') return; // conciliação por-banco antiga (aposentada); só vale o ajuste geral (AJUSTE_BANCOS)
     evs.push({tipo:m.Tipo||'SAÍDA',grupo:m.Grupo||'OUTROS',categoria:m.Categoria||'',perfil:m.Perfil||'JOÃO',conta:m.Conta||'',
       descricao:m.Descricao||'',valor:parseValor(m.Valor),status:m.Status||'PAGO',origem:m.Origem||'MANUAL',
       ref:m.Ref||'', compGasto:(m.CompGasto||''), compCaixa:(m.Competencia||''), fonte:false, movId:m.ID, data:(m.Data||'')});
@@ -1923,10 +1926,24 @@ function mesDoMov(m){
   return normComp(m.Competencia);
 }
 function movimentosDaConta(nome){
+  // Movimentos REAIS da conta (para extrato/saldo). Exclui os fatos de saldo informado
+  // (FECHOBANCO), a conciliação por-banco antiga (CONCILIACAO) e o ajuste geral (AJUSTE_BANCOS).
+  const excl={'FECHOBANCO':1,'CONCILIACAO':1,'CONCILIAÇÃO':1,'AJUSTE_BANCOS':1};
   const arr=(DB.movimentos||[]).filter(m=>
-    (m.Conta||'')===nome && String(m.Status||'').toUpperCase()==='PAGO');
+    (m.Conta||'')===nome && String(m.Status||'').toUpperCase()==='PAGO' && !excl[String(m.Origem||'').toUpperCase()]);
   arr.sort((a,b)=>chaveData(a)-chaveData(b));
   return arr;
+}
+// Fato "saldo real informado" de um banco num mês (não entra no fluxo).
+function fechoFato(nome, comp){ return (DB.movimentos||[]).find(m=>String(m.Origem||'').toUpperCase()==='FECHOBANCO' && String(m.Ref||'')==='FECHOBANCO:'+nome+':'+comp)||null; }
+// Abertura do mês = fechamento informado do mês anterior; se não houver, rola do saldo inicial.
+function aberturaBanco(nome, comp){
+  const fp=fechoFato(nome, compAdd(comp,-1));
+  if(fp) return parseValor(fp.Valor);
+  const c=DB.contas.find(x=>x.Nome===nome); let s=c?parseValor(c.SaldoInicial):0;
+  const INI=inicioControle();
+  movimentosDaConta(nome).forEach(m=>{ const mm=mesDoMov(m); if(INI&&mm<INI) return; if(mm>=comp) return; const v=parseValor(m.Valor); s+=((m.Tipo||'')==='ENTRADA'?v:-v); });
+  return s;
 }
 function popularExtratoContas(){
   const sel=document.getElementById('extConta'); if(!sel) return;
@@ -1948,27 +1965,25 @@ function mudarExtMes(d){
   const novo=compAdd(el.value||compAtual(),d);
   if([...el.options].some(o=>o.value===novo)){ el.value=novo; renderExtrato(); }
 }
-// Consolida uma conta no mês: abertura (= fechamento do mês anterior via rollforward),
-// entradas/saídas realizadas, fechamento calculado e o ajuste de conciliação (se houver).
+// Consolida uma conta no mês: abertura (= fechamento informado do mês anterior),
+// entradas/saídas realizadas, fechamento calculado e o fechamento real informado (se houver).
 function bancoConta(nome, comp){
-  const c=DB.contas.find(x=>x.Nome===nome);
-  const ini=c?parseValor(c.SaldoInicial):0;
   const INI=inicioControle();
-  const refConc='CONC:'+nome+':'+comp;
-  let abertura=ini, entradas=0, saidas=0, conc=null; const movs=[];
+  const abertura=aberturaBanco(nome, comp);
+  let entradas=0, saidas=0; const movs=[];
   movimentosDaConta(nome).forEach(m=>{
     const mm=mesDoMov(m);
-    if(INI && mm<INI) return;                       // antes do início do controle: ignora
-    if(mm<comp){ const v=parseValor(m.Valor); abertura+=((m.Tipo||'')==='ENTRADA'?v:-v); return; }
-    if(mm>comp) return;
-    if(String(m.Ref||'')===refConc){ conc=m; return; }  // o ajuste do mês entra separado
+    if(INI && mm<INI) return;
+    if(mm!==comp) return;
     const v=parseValor(m.Valor);
     if((m.Tipo||'')==='ENTRADA') entradas+=v; else saidas+=v;
     movs.push(m);
   });
   const calc=abertura+entradas-saidas;
-  const dif=conc? parseValor(conc.Valor)*((conc.Tipo||'')==='ENTRADA'?1:-1) : 0;
-  return {nome, abertura, entradas, saidas, calc, conc, dif, informado:(conc?calc+dif:null), fechado:!!conc, movs};
+  const fato=fechoFato(nome, comp);
+  const informado = fato? parseValor(fato.Valor) : null;
+  const dif = (informado!=null)? Math.round((informado-calc)*100)/100 : 0;
+  return {nome, abertura, entradas, saidas, calc, informado, dif, fechado:(informado!=null), movs};
 }
 function renderExtrato(){
   const elMes=document.getElementById('extComp');
@@ -1993,7 +2008,7 @@ function renderExtrato(){
   if(concEl){
     concEl.innerHTML='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:'+(todasFechadas?'#ECFDF3':'#FFF8E6')+';border:1px solid '+(todasFechadas?'#BBE9CB':'#F2D6A6')+';border-radius:10px;padding:10px 14px">'
       +'<span style="font-weight:700;color:'+(todasFechadas?'#166534':'#B45309')+'">'+(todasFechadas?'🔒 Mês fechado':'🔓 Mês aberto')+'</span>'
-      +'<span style="font-size:12.5px;color:#3F4F48">'+fechadas+' de '+dados.length+' conta(s) conciliada(s)'+(Math.abs(tDif)>=0.005?' · ajuste total <b>'+(tDif>0?'+':'')+brl(tDif)+'</b>':'')+'</span></div>';
+      +'<span style="font-size:12.5px;color:#3F4F48">'+fechadas+' de '+dados.length+' conta(s) informada(s)'+(todasFechadas&&Math.abs(tDif)>=0.005?' · ajuste geral <b>'+(tDif>0?'+':'')+brl(tDif)+'</b>':'')+'</span></div>';
   }
   // Conciliação por conta (você informa só o fechamento real de cada uma)
   let porConta='<table><thead><tr><th>Conta</th><th class="num">Abertura</th><th class="num">Entradas</th><th class="num">Saídas</th><th class="num">Fech. calc.</th><th class="num">Fech. real</th><th class="num">Dif.</th><th></th></tr></thead><tbody>';
@@ -2006,7 +2021,7 @@ function renderExtrato(){
       +'<td class="num">'+(d.fechado?brl(d.informado):'<span style="color:#B45309">—</span>')+'</td>'
       +'<td class="num">'+(d.fechado?(Math.abs(d.dif)<0.005?'<span style="color:#16A34A">ok</span>':'<b style="color:'+(d.dif<0?'#DC2626':'#16A34A')+'">'+(d.dif>0?'+':'')+brl(d.dif)+'</b>'):'')+'</td>'
       +'<td class="num" style="white-space:nowrap">'+(d.fechado
-        ? '<button class="btn-ghost" onclick=\'abrirConciliar('+JSON.stringify(d.nome)+','+JSON.stringify(comp)+')\'>Reconciliar</button> <button class="btn-ghost" onclick=\'reabrirMes('+JSON.stringify(d.nome)+','+JSON.stringify(comp)+')\'>Reabrir</button>'
+        ? '<button class="btn-ghost" onclick=\'abrirConciliar('+JSON.stringify(d.nome)+','+JSON.stringify(comp)+')\'>Editar</button> <button class="btn-ghost" onclick=\'reabrirMes('+JSON.stringify(d.nome)+','+JSON.stringify(comp)+')\'>Reabrir</button>'
         : '<button class="btn green" onclick=\'abrirConciliar('+JSON.stringify(d.nome)+','+JSON.stringify(comp)+')\'>🔒 Informar fechamento</button>')
       +'</td></tr>';
   });
@@ -2038,33 +2053,30 @@ function renderExtrato(){
   });
   if(!pooled.length) hist+='<tr><td colspan="6" class="vazio">Nenhuma movimentação realizada neste mês.</td></tr>';
   hist+='<tr class="ext-abertura"><td colspan="5">Fechamento calculado</td><td class="num '+(tCalc<0?'v-neg':'')+'">'+brl(tCalc)+'</td></tr>';
-  if(todasFechadas && Math.abs(tDif)>=0.005) hist+='<tr class="ext-abertura"><td colspan="5">Ajuste de conciliação</td><td class="num"><b style="color:'+(tDif<0?'#DC2626':'#16A34A')+'">'+(tDif>0?'+':'')+brl(tDif)+'</b></td></tr>';
+  if(todasFechadas && Math.abs(tDif)>=0.005) hist+='<tr class="ext-abertura"><td colspan="5">Ajuste geral (bancos) — net de todos os bancos</td><td class="num"><b style="color:'+(tDif<0?'#DC2626':'#16A34A')+'">'+(tDif>0?'+':'')+brl(tDif)+'</b></td></tr>';
   if(todasFechadas) hist+='<tr class="ext-abertura"><td colspan="5"><b>Fechamento real</b></td><td class="num '+(tInf<0?'v-neg':'v-liq')+'"><b>'+brl(tInf)+'</b></td></tr>';
   const histTbl='<table><thead><tr><th>Data</th><th>Descrição</th><th>Conta</th><th class="num">Entrada</th><th class="num">Saída</th><th class="num">Saldo</th></tr></thead><tbody>'+hist+'</tbody></table>';
   tbl.innerHTML='<div style="font-size:11px;font-weight:700;color:#5B6B63;text-transform:uppercase;letter-spacing:1px;margin:2px 0 8px">Conciliação por conta</div>'+porConta
     +'<div style="font-size:11px;font-weight:700;color:#5B6B63;text-transform:uppercase;letter-spacing:1px;margin:18px 0 8px">Movimentos do mês (Bancos)</div>'+histTbl;
 }
-// Conciliação: fecha o mês de uma conta batendo com o saldo real do banco.
-function conciliacaoDoMes(nome, comp){ const ref='CONC:'+nome+':'+comp; return (DB.movimentos||[]).find(m=>String(m.Ref||'')===ref)||null; }
-function fechamentoSemConc(nome, comp){
-  const c=DB.contas.find(x=>x.Nome===nome); let s=c?parseValor(c.SaldoInicial):0;
-  const INI=inicioControle(), ref='CONC:'+nome+':'+comp;
-  movimentosDaConta(nome).forEach(m=>{ if(String(m.Ref||'')===ref) return; const mm=mesDoMov(m); if(INI&&mm<INI) return; if(mm>comp) return; const v=parseValor(m.Valor); s+=((m.Tipo||'')==='ENTRADA'?v:-v); });
-  return s;
-}
+// Conciliação: você informa o saldo REAL de cada banco (um FATO, não entra no fluxo).
+// Quando TODOS os bancos do perfil estão informados, o app cria UM ajuste geral (net) que entra no fluxo.
 function diaFimMes(comp){ const p=String(comp).split('-'); const y=+p[0], m=+p[1]; const d=new Date(y,m,0).getDate(); return String(d).padStart(2,'0')+'/'+String(m).padStart(2,'0')+'/'+y; }
+function refAjusteBancos(perfil, comp){ return 'AJB:'+normPerfil(perfil)+':'+comp; }
+function ajusteBancosMov(perfil, comp){ const ref=refAjusteBancos(perfil,comp); return (DB.movimentos||[]).find(m=>String(m.Ref||'')===ref)||null; }
 function abrirConciliar(nome, comp){
-  const calc=fechamentoSemConc(nome, comp);
-  const conc=conciliacaoDoMes(nome, comp);
-  const realAtual = conc? (calc + parseValor(conc.Valor)*((conc.Tipo||'')==='ENTRADA'?1:-1)) : calc;
-  document.getElementById('modalT').textContent='Conciliar / Fechar mês — '+labelMesAno(comp);
+  const calc=bancoConta(nome, comp).calc;
+  const fato=fechoFato(nome, comp);
+  const realAtual = fato? parseValor(fato.Valor) : calc;
+  document.getElementById('modalT').textContent='Informar fechamento — '+labelMesAno(comp);
   document.getElementById('modalC').innerHTML=
      '<input type="hidden" id="conc-conta" value="'+esc(nome)+'"><input type="hidden" id="conc-comp" value="'+esc(comp)+'">'
     +'<div style="font-size:12px;color:#5B6B63;margin-bottom:8px">Conta: <b>'+esc(nome)+'</b></div>'
     +'<div style="background:#F6F8FA;border-radius:8px;padding:10px;font-size:12.5px;margin-bottom:10px">Saldo calculado pelo app: <b id="conc-calc">'+brl(calc)+'</b></div>'
     +'<div class="grid full">'+fld('Saldo REAL no banco (fim de '+labelMesAno(comp)+')','<input id="conc-real" inputmode="decimal" value="'+String(realAtual).replace('.',',')+'" oninput="previewConc()">')+'</div>'
     +'<div id="conc-diff" style="font-size:12.5px;margin:2px 2px 8px"></div>'
-    +'<div class="acoes"><button class="btn-ghost" onclick="fecharModal()">Cancelar</button><button class="btn green" id="conc-save" onclick="salvarConciliacao()">🔒 Fechar mês</button></div>';
+    +'<p style="font-size:11px;color:#8A968F;margin:2px 2px 8px">A diferença por banco entra num <b>ajuste geral</b> (soma de todos os bancos), criado só quando todos forem informados. Transferência entre seus bancos se anula e não infla receitas/despesas.</p>'
+    +'<div class="acoes"><button class="btn-ghost" onclick="fecharModal()">Cancelar</button><button class="btn green" id="conc-save" onclick="salvarConciliacao()">Salvar fechamento</button></div>';
   abrirModal(); previewConc();
 }
 function previewConc(){
@@ -2072,28 +2084,52 @@ function previewConc(){
   const real=parseValor(document.getElementById('conc-real').value);
   const diff=real-calc, el=document.getElementById('conc-diff');
   if(Math.abs(diff)<0.005) el.innerHTML='<span style="color:#16A34A">Bate certinho — sem diferença. ✓</span>';
-  else el.innerHTML='Diferença a ajustar: <b style="color:'+(diff<0?'#DC2626':'#16A34A')+'">'+(diff>0?'+':'')+brl(diff)+'</b> <span style="color:#5B6B63">(vira um lançamento de ajuste no mês)</span>';
+  else el.innerHTML='Diferença desta conta: <b style="color:'+(diff<0?'#DC2626':'#16A34A')+'">'+(diff>0?'+':'')+brl(diff)+'</b> <span style="color:#5B6B63">(entra no ajuste geral do mês)</span>';
 }
 async function salvarConciliacao(){
   const nome=document.getElementById('conc-conta').value, comp=document.getElementById('conc-comp').value;
-  const calc=fechamentoSemConc(nome, comp);
   const real=parseValor(document.getElementById('conc-real').value);
-  const diff=Math.round((real-calc)*100)/100;
-  const conc=conciliacaoDoMes(nome, comp);
   const contaObj=DB.contas.find(x=>x.Nome===nome); const perfilConta=contaObj?(contaObj.Perfil||'JOÃO'):perfilAtivo;
-  const reg={Conta:nome,Perfil:perfilConta,Competencia:comp,CompGasto:'',Data:diaFimMes(comp),Tipo:diff>=0?'ENTRADA':'SAÍDA',Grupo:'CONCILIAÇÃO',Categoria:'',Descricao:'Conciliação — saldo do banco',Valor:Math.abs(diff),Status:'PAGO',Origem:'CONCILIACAO',Ref:'CONC:'+nome+':'+comp};
   const btn=document.getElementById('conc-save'); if(btn){ btn.disabled=true; btn.textContent='Salvando...'; }
+  const fato=fechoFato(nome, comp);
+  const reg={Conta:nome,Perfil:perfilConta,Competencia:comp,CompGasto:'',Data:diaFimMes(comp),Tipo:'ENTRADA',Grupo:'FECHAMENTO BANCO',Categoria:'',Descricao:'Saldo informado — '+nome,Valor:real,Status:'PREVISTO',Origem:'FECHOBANCO',Ref:'FECHOBANCO:'+nome+':'+comp};
   let r;
-  if(conc){ reg.ID=conc.ID; r=await chamar({acao:'editar',aba:'Movimentos',registro:reg}); }
+  if(fato){ reg.ID=fato.ID; r=await chamar({acao:'editar',aba:'Movimentos',registro:reg}); }
   else { r=await chamar({acao:'salvar',aba:'Movimentos',registro:reg}); }
-  if(r.ok){ toast('Mês fechado / conciliado'); fecharModal(); await carregar(); }
-  else { if(btn){ btn.disabled=false; btn.textContent='🔒 Fechar mês'; } toast('Erro: '+(r.erro||'falha'),true); }
+  if(!r.ok){ if(btn){ btn.disabled=false; btn.textContent='Salvar fechamento'; } toast('Erro: '+(r.erro||'falha'),true); return; }
+  await recomputarAjusteBancos(perfilConta, comp, {[nome]: real});
+  toast('Fechamento informado'); fecharModal(); await carregar();
+}
+// Cria/atualiza/remove o ajuste geral (net) do perfil no mês. `override` = {conta: saldoReal|null} pra
+// refletir a mudança que acabou de ser salva sem depender do reload.
+async function recomputarAjusteBancos(perfil, comp, override){
+  override=override||{};
+  const contasP=(DB.contas||[]).filter(c=>mesmoPerfil(c.Perfil, perfil));
+  if(!contasP.length) return;
+  let todos=true, net=0;
+  contasP.forEach(c=>{
+    const real = (c.Nome in override)? override[c.Nome] : (fechoFato(c.Nome,comp)? parseValor(fechoFato(c.Nome,comp).Valor) : null);
+    if(real==null){ todos=false; return; }
+    net += real - bancoConta(c.Nome, comp).calc;
+  });
+  net=Math.round(net*100)/100;
+  const existente=ajusteBancosMov(perfil, comp);
+  if(todos && Math.abs(net)>=0.005){
+    const reg={Conta:'',Perfil:perfil,Competencia:comp,CompGasto:'',Data:diaFimMes(comp),Tipo:net>=0?'ENTRADA':'SAÍDA',Grupo:'CONCILIAÇÃO',Categoria:'',Descricao:'Ajuste de conciliação (bancos) — '+labelMesAno(comp),Valor:Math.abs(net),Status:'PAGO',Origem:'AJUSTE_BANCOS',Ref:refAjusteBancos(perfil,comp)};
+    if(existente){ reg.ID=existente.ID; await chamar({acao:'editar',aba:'Movimentos',registro:reg}); }
+    else { await chamar({acao:'salvar',aba:'Movimentos',registro:reg}); }
+  } else if(existente){
+    await chamar({acao:'excluir',aba:'Movimentos',id:existente.ID});
+  }
 }
 async function reabrirMes(nome, comp){
-  const conc=conciliacaoDoMes(nome, comp); if(!conc) return;
-  if(!confirm('Reabrir '+labelMesAno(comp)+' de '+nome+'? O ajuste da conciliação será removido.')) return;
-  const r=await chamar({acao:'excluir',aba:'Movimentos',id:conc.ID});
-  if(r.ok){ toast('Mês reaberto'); await carregar(); } else toast('Erro: '+(r.erro||'falha'),true);
+  const fato=fechoFato(nome, comp); if(!fato) return;
+  if(!confirm('Reabrir '+labelMesAno(comp)+' de '+nome+'? O fechamento informado será removido.')) return;
+  const contaObj=DB.contas.find(x=>x.Nome===nome); const perfilConta=contaObj?(contaObj.Perfil||'JOÃO'):perfilAtivo;
+  const r=await chamar({acao:'excluir',aba:'Movimentos',id:fato.ID});
+  if(!r.ok){ toast('Erro: '+(r.erro||'falha'),true); return; }
+  await recomputarAjusteBancos(perfilConta, comp, {[nome]: null});
+  toast('Mês reaberto'); await carregar();
 }
 
 // ===== EMPRESTIMOS =====
