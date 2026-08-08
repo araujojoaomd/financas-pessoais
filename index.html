@@ -2010,6 +2010,17 @@ function renderExtrato(){
         : '<button class="btn green" onclick=\'abrirConciliar('+JSON.stringify(d.nome)+','+JSON.stringify(comp)+')\'>🔒 Informar fechamento</button>')
       +'</td></tr>';
   });
+  // Totalizador — o Fech. calc. total bate com o "Fechamento calculado" da tabela de movimentos.
+  const bt='border-top:2px solid #0F3D2E;font-weight:700';
+  porConta+='<tr>'
+    +'<td style="'+bt+'">TOTAL ('+dados.length+' conta'+(dados.length>1?'s':'')+')</td>'
+    +'<td class="num" style="'+bt+(tAb<0?';color:#DC2626':'')+'">'+brl(tAb)+'</td>'
+    +'<td class="num v-in" style="'+bt+'">'+brl(tEnt)+'</td>'
+    +'<td class="num v-out" style="'+bt+'">'+brl(tSai)+'</td>'
+    +'<td class="num" style="'+bt+(tCalc<0?';color:#DC2626':'')+'">'+brl(tCalc)+'</td>'
+    +'<td class="num" style="'+bt+'">'+(todasFechadas?brl(tInf):'<span style="color:#B45309">—</span>')+'</td>'
+    +'<td class="num" style="'+bt+'">'+(Math.abs(tDif)>=0.005?'<span style="color:'+(tDif<0?'#DC2626':'#16A34A')+'">'+(tDif>0?'+':'')+brl(tDif)+'</span>':(todasFechadas?'<span style="color:#16A34A">ok</span>':''))+'</td>'
+    +'<td style="'+bt+'"></td></tr>';
   porConta+='</tbody></table>';
   // Movimentos do mês (pool consolidado, histórico) com saldo corrido a partir da abertura
   let pooled=[]; dados.forEach(d=> d.movs.forEach(m=> pooled.push(m)));
